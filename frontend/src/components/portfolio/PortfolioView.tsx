@@ -24,7 +24,7 @@ export function PortfolioView({ address: param, invalid }: { address?: Address; 
   const now = useNow();
   const address = param ?? connected;
   const isSelf = !!address && !!connected && address.toLowerCase() === connected.toLowerCase();
-  const { portfolio, marketById, loading, logsLoading, logsError } = usePortfolio(address, now);
+  const { portfolio, marketById, loading, logsLoading, logsError } = usePortfolio(invalid ? undefined : address, now);
 
   if (invalid) {
     return (
@@ -39,6 +39,15 @@ export function PortfolioView({ address: param, invalid }: { address?: Address; 
     );
   }
 
+  // A wallet that never bet: the Summary's "No calls yet" card says it once instead of three empty cards.
+  // While logs load with nothing landed, the Summary's skeleton stands alone, so nothing flashes.
+  const nothing =
+    !!portfolio &&
+    !logsError &&
+    portfolio.markets.length === 0 &&
+    portfolio.inFlight.length === 0 &&
+    portfolio.history.length === 0;
+
   return (
     <div className="space-y-12">
       <PortfolioHeader address={address} isSelf={isSelf} reconnecting={status === "reconnecting"} />
@@ -48,16 +57,20 @@ export function PortfolioView({ address: param, invalid }: { address?: Address; 
         ) : (
           <>
             <Summary portfolio={portfolio} logsLoading={logsLoading} />
-            <ClaimableList items={portfolio.claimable} canAct={isSelf} now={now} />
-            <InFlight trips={portfolio.inFlight} marketById={marketById} now={now} logsLoading={logsLoading} />
-            <ActivePositions items={portfolio.active} now={now} />
-            <History
-              items={portfolio.history}
-              settled={portfolio.settled}
-              marketById={marketById}
-              loading={logsLoading}
-              error={logsError}
-            />
+            {!nothing && (
+              <>
+                <ClaimableList items={portfolio.claimable} canAct={isSelf} now={now} trips={portfolio.inFlight} />
+                <InFlight trips={portfolio.inFlight} marketById={marketById} now={now} logsLoading={logsLoading} />
+                <ActivePositions items={portfolio.active} now={now} />
+                <History
+                  items={portfolio.history}
+                  settled={portfolio.settled}
+                  marketById={marketById}
+                  loading={logsLoading}
+                  error={logsError}
+                />
+              </>
+            )}
           </>
         ))}
     </div>
@@ -68,9 +81,9 @@ function PortfolioBodySkeleton() {
   return (
     <div className="space-y-12" aria-busy="true" role="status">
       <span className="sr-only">Loading positions</span>
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="skeleton h-24" />
+          <div key={i} className="skeleton h-[7.5rem]" />
         ))}
       </div>
       <div className="skeleton h-40" />

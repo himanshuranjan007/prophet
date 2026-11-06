@@ -9,6 +9,9 @@ import { hubAbi, spokeAbi } from "./abi";
 import { usePending } from "./hooks";
 import { useAction } from "./useAction";
 
+/** A locally recorded spoke claim older than this no longer counts as in flight. */
+export const CLAIM_PENDING_MAX = 90 * 60;
+
 /**
  * Claim winnings / refunds for one market position on one chain. Shared by the market page and the
  * portfolio. Hub positions claim on Base directly; spoke positions send a CCIP claim from that spoke
@@ -55,6 +58,14 @@ export function useClaim() {
     isBusy: (marketId: bigint | number, n: Net) => action.busy && busyKey === `${marketId}:${n.chain.id}`,
     /** a spoke claim sent from this browser and not yet processed by the hub */
     claimInFlight: (marketId: bigint | number, n: Net) =>
-      pending.list.find((p) => p.kind === "claim" && p.marketId === String(marketId) && p.chainId === n.chain.id && p.user === address),
+      pending.list.find(
+        (p) =>
+          p.kind === "claim" &&
+          p.marketId === String(marketId) &&
+          p.chainId === n.chain.id &&
+          p.user === address &&
+          // the hub ignores some claims (lost / sent before resolution); don't block the button forever
+          Date.now() / 1000 - p.at < CLAIM_PENDING_MAX,
+      ),
   };
 }

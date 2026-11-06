@@ -8,31 +8,24 @@ import type { PortfolioMarket } from "@/lib/portfolio";
 import { ChainDot } from "../ChainDot";
 import { IconClock } from "../Doodles";
 import { StatusLabel } from "../ui";
+import { QuestionTitle, Stake } from "./parts";
 
 /** Markets still in play (open, or closed and waiting to resolve) with this wallet's stake per chain. */
 export function ActivePositions({ items, now }: { items: PortfolioMarket[]; now: number }) {
   const uid = useId();
   return (
     <section className="card p-6" aria-labelledby={`${uid}-title`}>
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 id={`${uid}-title`} className="font-display text-head">
-          Open positions
-        </h2>
-        {items.length > 0 && (
-          <span className="chip num">
-            {items.length}
-            <span className="sr-only"> {items.length === 1 ? "market" : "markets"}</span>
-          </span>
-        )}
-      </div>
+      <h2 id={`${uid}-title`} className="font-display text-head">
+        Open positions
+      </h2>
 
       {items.length === 0 ? (
-        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
-          <p>No open positions.</p>
-          <Link href="/" className="btn-quiet">
+        <p className="mt-2 text-sm text-muted">
+          No open positions right now.{" "}
+          <Link href="/" className="link font-semibold text-ink">
             Find a market
           </Link>
-        </div>
+        </p>
       ) : (
         <ul className="mt-2 divide-y divide-dashed divide-line">
           {items.map((item) => (
@@ -52,11 +45,7 @@ function Row({ item, now }: { item: PortfolioMarket; now: number }) {
   return (
     <li className="grid gap-x-8 gap-y-3 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,17rem)]">
       <div className="min-w-0 space-y-2">
-        <h3 className="font-display text-[1.35rem] leading-tight break-words">
-          <Link href={`/market/${item.id}`} className="decoration-1 underline-offset-4 hover:underline">
-            {m.question}
-          </Link>
-        </h3>
+        <QuestionTitle id={item.id} question={m.question} />
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
           <StatusLabel market={m} now={now} />
           {open && (
@@ -72,7 +61,7 @@ function Row({ item, now }: { item: PortfolioMarket; now: number }) {
       </div>
 
       <div className="min-w-0 space-y-2">
-        <ul aria-label="Your stake by chain" className="space-y-1.5">
+        <ul aria-label="Stake by chain" className="space-y-1.5">
           {item.chains.map((c) => (
             <li key={c.net.chain.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <ChainName net={c.net} />
@@ -94,14 +83,6 @@ function ChainName({ net }: { net: Net }) {
     <span className="inline-flex items-center gap-1.5 text-sm font-semibold leading-none sm:min-w-[5.5rem]" title={net.short}>
       <ChainDot net={net} label={false} />
       <span className="sr-only sm:not-sr-only">{net.short}</span>
-    </span>
-  );
-}
-
-function Stake({ amount, yes }: { amount: bigint; yes: boolean }) {
-  return (
-    <span className={`num font-semibold ${yes ? "text-yes" : "text-no"}`}>
-      {fmtToken(amount)} {yes ? "YES" : "NO"}
     </span>
   );
 }

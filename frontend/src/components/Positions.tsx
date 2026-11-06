@@ -7,7 +7,7 @@ import { HUB_ADDRESS, HUB_CHAIN, NETS, Outcome, ccipExplorerTx, type Market, typ
 import { hubAbi } from "@/lib/abi";
 import { fmtToken } from "@/lib/format";
 import { useBetLogs, usePending } from "@/lib/hooks";
-import { useClaim } from "@/lib/useClaim";
+import { CLAIM_PENDING_MAX, useClaim } from "@/lib/useClaim";
 import { ChainDot } from "./ChainDot";
 import { IconCheck, IconChevron, IconPlane, IconReturn } from "./Doodles";
 import { ActionError, ExternalLink } from "./ui";
@@ -79,7 +79,8 @@ export function Positions({ marketId, market, now }: { marketId: bigint; market:
 
   if (!address) return null;
   const betsInFlight = mine.filter((p) => p.kind === "bet");
-  const claimInFlight = (n: Net) => mine.find((p) => p.kind === "claim" && p.chainId === n.chain.id);
+  // old local claims stop counting (the hub may have ignored them: lost / sent before resolution)
+  const claimInFlight = (n: Net) => mine.find((p) => p.kind === "claim" && p.chainId === n.chain.id && now - p.at < CLAIM_PENDING_MAX);
   const hasAny = rows.some((r) => r.pos && (r.pos.yes > 0n || r.pos.no > 0n)) || betsInFlight.length > 0;
   if (!hasAny) return null;
 

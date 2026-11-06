@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { NETS, ccipExplorerMsg, type Market, type Net } from "@/lib/config";
-import { fmtToken } from "@/lib/format";
 import type { Trip } from "@/lib/portfolio";
 import { ChainDot } from "../ChainDot";
 import { IconPlane, IconReturn } from "../Doodles";
 import { ExternalLink } from "../ui";
+import { QuestionLine, Stake, Tokens } from "./parts";
 
 const HUB = NETS.find((n) => n.isHub)!;
 /** Typical CCIP trip (and the payout leg back from Base, which has no per-chain estimate). */
@@ -95,12 +94,9 @@ function TripRow({ trip: t, market, now }: { trip: Trip; market?: Market; now: n
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <Route trip={t} />
         </p>
-        <Link
-          href={`/market/${t.marketId}`}
-          className="mt-1 block truncate text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
-        >
-          {market?.question ?? `Market #${t.marketId}`}
-        </Link>
+        <div className="mt-1">
+          <QuestionLine id={t.marketId} question={market?.question} />
+        </div>
         {meta.length > 0 && <p className="num mt-1 text-sm text-muted">{meta.join(" · ")}</p>}
         {elapsed !== undefined && (
           <div className="mt-2 h-0.5 w-full overflow-hidden rounded-full bg-line" aria-hidden>
@@ -120,7 +116,7 @@ function TripRow({ trip: t, market, now }: { trip: Trip; market?: Market; now: n
   );
 }
 
-/** "1.5 BnM YES from Arbitrum -> Base", "Winnings 2 BnM -> Ethereum", ... */
+/** "Bet 1.5 YES from Arbitrum -> Base", "Winnings 2 BnM -> Ethereum", ... */
 function Route({ trip: t }: { trip: Trip }) {
   const arrow = (
     <>
@@ -128,17 +124,14 @@ function Route({ trip: t }: { trip: Trip }) {
       <span className="sr-only">to</span>
     </>
   );
-  const amount = t.amount !== undefined && <span className="num font-semibold">{fmtToken(t.amount)} BnM</span>;
+  const amount = t.amount !== undefined && <Tokens amount={t.amount} />;
 
   switch (t.kind) {
     case "bet":
       return (
         <>
-          {t.amount !== undefined && (
-            <span className={`num font-semibold ${t.yes ? "text-yes" : "text-no"}`}>
-              {fmtToken(t.amount)} BnM {t.yes ? "YES" : "NO"}
-            </span>
-          )}
+          <span>Bet</span>
+          {t.amount !== undefined && <Stake amount={t.amount} yes={!!t.yes} />}
           <span>from</span>
           <ChainDot net={t.net} />
           {arrow}
