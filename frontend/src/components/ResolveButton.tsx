@@ -5,6 +5,7 @@ import { waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { HUB_ADDRESS, HUB_CHAIN, Outcome, assetByFeed, type Market } from "@/lib/config";
 import { hubAbi } from "@/lib/abi";
 import { useAction } from "@/lib/useAction";
+import { walletModal } from "@/lib/walletModal";
 import { CrystalBall } from "./Doodles";
 import { ActionError } from "./ui";
 
@@ -74,7 +75,7 @@ export function ResolveButton({ marketId, market, now, onDone }: { marketId: big
       </div>
 
       <div className="space-y-2">
-        <button type="button" className="btn-primary w-full py-3 text-base whitespace-normal" disabled={!ready || !isConnected || action.busy} aria-busy={action.busy} onClick={resolve}>
+        <button type="button" className="btn-primary w-full py-3 text-base whitespace-normal" disabled={isConnected && (!ready || action.busy)} aria-busy={action.busy} onClick={isConnected ? resolve : () => walletModal.open()}>
           {action.step ?? (isConnected ? "Resolve market" : "Connect a wallet to resolve")}
         </button>
         <p className="text-center text-xs text-muted">

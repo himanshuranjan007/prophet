@@ -10,6 +10,7 @@ import { bnmAbi, hubAbi, spokeAbi } from "@/lib/abi";
 import { fmtToken, odds } from "@/lib/format";
 import { usePending } from "@/lib/hooks";
 import { useAction } from "@/lib/useAction";
+import { walletModal } from "@/lib/walletModal";
 import { ChainDot } from "./ChainDot";
 import { IconAlert, IconCheck, IconCoins, IconPlane } from "./Doodles";
 import { ActionError, ExternalLink } from "./ui";
@@ -302,10 +303,10 @@ export function BetPanel({
       <div className="space-y-3">
         <button
           type="button"
-          className={`${yes ? "btn-yes" : "btn-no"} num w-full py-3 text-base whitespace-normal`}
-          disabled={!isConnected || action.busy || amount < MIN_BET}
+          className={`${!isConnected ? "btn-primary" : yes ? "btn-yes" : "btn-no"} num w-full py-3 text-base whitespace-normal`}
+          disabled={isConnected && (action.busy || amount < MIN_BET)}
           aria-busy={action.busy}
-          onClick={placeBet}
+          onClick={isConnected ? placeBet : () => walletModal.open()}
         >
           {action.step ?? ctaLabel}
         </button>

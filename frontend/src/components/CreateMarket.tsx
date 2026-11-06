@@ -10,6 +10,7 @@ import { hubAbi } from "@/lib/abi";
 import { fmtUsd } from "@/lib/format";
 import { useAssetPrice, useNow } from "@/lib/hooks";
 import { useAction } from "@/lib/useAction";
+import { walletModal } from "@/lib/walletModal";
 import { IconPencil } from "./Doodles";
 import { ActionError } from "./ui";
 
@@ -159,7 +160,7 @@ export function CreateMarket({ onCreated }: { onCreated?: () => void }) {
         </p>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" className="btn-primary" disabled={!isConnected || action.busy} onClick={create}>
+          <button type="button" className="btn-primary" disabled={isConnected && action.busy} onClick={isConnected ? create : () => walletModal.open()}>
             {action.step ?? (isConnected ? "Create market" : "Connect a wallet to create")}
           </button>
           <button type="button" className="btn-quiet" onClick={() => setOpen(false)}>

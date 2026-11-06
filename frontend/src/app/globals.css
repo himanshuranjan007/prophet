@@ -335,3 +335,36 @@ body {
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------- wallet modal + account menu */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.wallet-dialog[open] {
+  animation: pop-in var(--dur-base) var(--ease-out);
+}
+.wallet-dialog::backdrop {
+  animation: fade-in var(--dur-base) var(--ease-out);
+}
+.account-pop:popover-open {
+  animation: pop-in var(--dur-quick) var(--ease-out);
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wallet-dialog[open],
+  .wallet-dialog::backdrop,
+  .account-pop:popover-open {
+    animation: none;
+  }
+}

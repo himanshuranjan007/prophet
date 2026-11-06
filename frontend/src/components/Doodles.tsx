@@ -101,3 +101,15 @@ export const IconCoins = (p: P) => (
 export const IconAlert = (p: P) => (
   <Icon {...p} d="M11.2 4.3c.4-.7 1.3-.7 1.7 0l8 14.1c.4.7-.1 1.5-.9 1.5H4c-.8 0-1.3-.8-.9-1.5l8.1-14.1zM12 9.6v4.4M12 16.9v.1" />
 );
+/** Wallet (connect). */
+export const IconWallet = (p: P) => (
+  <Icon {...p} d="M4.4 7.4c0-1.1.9-2 2-2h11.1c.6 0 1 .4 1 1v1.3M4.4 7.4v10.2c0 1 .8 1.8 1.8 1.8h12.6c.6 0 1-.4 1-1v-3.1M4.4 7.4c0 .9.7 1.5 1.6 1.5h12.8c.6 0 1 .4 1 1v2.4M15.6 12.3h4.3v3.1h-4.3c-.9 0-1.6-.7-1.6-1.6s.7-1.5 1.6-1.5z" />
+);
+/** Close (×). */
+export const IconClose = (p: P) => <Icon {...p} d="M6.2 6.4c3.9 3.6 7.6 7.4 11.4 11.3M17.8 6.2c-3.8 3.9-7.6 7.7-11.6 11.5" sw={2} />;
+/** Chevron right (row affordance). */
+export const IconChevron = (p: P) => <Icon {...p} d="M9.4 5.6c2.3 2.2 4.4 4.4 6.4 6.6-2 2.1-4.1 4.2-6.3 6.3" sw={2} />;
+/** QR (scan with phone). */
+export const IconQr = (p: P) => (
+  <Icon {...p} d="M4.5 4.6h5.4v5.3H4.5zM14.1 4.5h5.4v5.4h-5.4zM4.6 14.1h5.3v5.4H4.6zM14.2 14.2h2.2M18.4 14.1v2.3M14.1 17.4v2.1h2.2M18.5 18.6v.9" />
+);

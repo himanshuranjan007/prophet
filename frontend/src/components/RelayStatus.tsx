@@ -9,6 +9,7 @@ import { feedRelayerAbi } from "@/lib/abi";
 import { fmtUsd } from "@/lib/format";
 import { useAssetPrice, useRelayState } from "@/lib/hooks";
 import { useAction } from "@/lib/useAction";
+import { walletModal } from "@/lib/walletModal";
 import { IconPlane } from "./Doodles";
 import { ActionError, ExternalLink } from "./ui";
 
@@ -84,7 +85,7 @@ export function RelayStatus({ asset, now }: { asset: Asset; now: number }) {
           </span>
         </p>
         {canRelay && !sent && (
-          <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={!isConnected || action.busy} onClick={push}>
+          <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={isConnected && action.busy} onClick={isConnected ? push : () => walletModal.open()}>
             <IconPlane className="h-4 w-4" />
             {action.step ?? (isConnected ? (gap !== undefined ? "Relay next price" : "Relay latest price") : "Connect to relay")}
           </button>

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { WagmiProvider } from "wagmi";
 import { getConfig } from "@/lib/wagmi";
+import { ConnectModal } from "@/components/wallet/ConnectModal";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [config] = useState(() => getConfig());
@@ -12,7 +13,10 @@ export function Providers({ children }: { children: ReactNode }) {
   );
   return (
     <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <ConnectModal />
+      </QueryClientProvider>
     </WagmiProvider>
   );
 }
