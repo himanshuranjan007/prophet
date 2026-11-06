@@ -1,4 +1,4 @@
-export { hubAbi, spokeAbi } from "./abi.gen";
+export { hubAbi, spokeAbi, relayedFeedAbi, feedRelayerAbi } from "./abi.gen";
 
 export const bnmAbi = [
   { type: "function", name: "drip", stateMutability: "nonpayable", inputs: [{ name: "to", type: "address" }], outputs: [] },
@@ -26,6 +26,19 @@ export const bnmAbi = [
 ] as const;
 
 export const feedAbi = [
+  {
+    type: "function",
+    name: "getRoundData",
+    stateMutability: "view",
+    inputs: [{ name: "_roundId", type: "uint80" }],
+    outputs: [
+      { name: "roundId", type: "uint80" },
+      { name: "answer", type: "int256" },
+      { name: "startedAt", type: "uint256" },
+      { name: "updatedAt", type: "uint256" },
+      { name: "answeredInRound", type: "uint80" },
+    ],
+  },
   {
     type: "function",
     name: "latestRoundData",

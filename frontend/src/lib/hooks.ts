@@ -4,8 +4,8 @@ import { useSyncExternalStore } from "react";
 import { usePublicClient, useReadContract, useReadContracts } from "wagmi";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { parseAbiItem, type Address } from "viem";
-import { ETH_USD_FEED, HUB_ADDRESS, HUB_CHAIN, HUB_DEPLOY_BLOCK, type Market } from "./config";
-import { feedAbi, hubAbi } from "./abi";
+import { HUB_ADDRESS, HUB_CHAIN, HUB_DEPLOY_BLOCK, assetBySymbol, type AppChain, type Asset, type Market } from "./config";
+import { feedAbi, feedRelayerAbi, hubAbi, relayedFeedAbi } from "./abi";
 
 const hub = { address: HUB_ADDRESS, abi: hubAbi, chainId: HUB_CHAIN.id } as const;
 
@@ -58,9 +58,129 @@ export function useMarket(id: bigint) {
   return { market: q.data as Market | undefined, ...q };
 }
 
+/** Latest Chainlink price for an asset, read from its source feed (where the real feed lives). */
+export function useAssetPrice(asset: Asset | undefined) {
+  const q = useReadContract({
+    address: asset?.source.feed,
+    abi: feedAbi,
+    functionName: "latestRoundData",
+    chainId: asset?.source.chainId,
+    query: { enabled: !!asset },
+  });
+  return q.data ? { price: q.data[1], updatedAt: Number(q.data[3]), roundId: q.data[0] } : undefined;
+}
+
 export function useEthPrice() {
-  const q = useReadContract({ address: ETH_USD_FEED, abi: feedAbi, functionName: "latestRoundData", chainId: HUB_CHAIN.id });
-  return q.data ? { price: q.data[1], updatedAt: Number(q.data[3]) } : undefined;
+  return useAssetPrice(assetBySymbol("ETH"));
+}
+
+// ---------------------------------------------------------------- feed history (Chainlink rounds)
+
+export type FeedRound = { id: bigint; price: bigint; t: number };
+
+const LOW64 = (1n << 64n) - 1n;
+const BATCH = 60;
+const MAX_ROUNDS = 400;
+/** Per-feed cache of rounds already fetched (ascending by time); each poll only reads new rounds. */
+const roundCache = new Map<string, FeedRound[]>();
+
+/**
+ * Chainlink rounds for `feed` on `chainId` covering at least [fromSec, now], oldest first.
+ * Includes the last round before `fromSec` so a step line can start at the window edge.
+ * Walks round ids backwards within the current phase (proxy ids are phase<<64 | aggregatorRound).
+ */
+export function useFeedHistory(chainId: AppChain["id"] | undefined, feed: Address | undefined, fromSec: number) {
+  const client = usePublicClient({ chainId });
+  return useQuery({
+    queryKey: ["feedHistory", chainId, feed, fromSec],
+    enabled: !!client && !!feed && fromSec > 0,
+    refetchInterval: 15_000,
+    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<FeedRound[]> => {
+      const key = `${chainId}:${feed!.toLowerCase()}`;
+      let rounds = roundCache.get(key) ?? [];
+
+      /** Read rounds walking back from `startId`, stopping when `stop` says so or the phase begins. */
+      const walk = async (startId: bigint, stop: (r: FeedRound) => boolean) => {
+        const out: FeedRound[] = [];
+        let id = startId;
+        while ((id & LOW64) > 0n && out.length < MAX_ROUNDS) {
+          const ids: bigint[] = [];
+          for (let k = 0; k < BATCH && (id & LOW64) > 0n; k++, id--) ids.push(id);
+          const res = await client!.multicall({
+            contracts: ids.map((rid) => ({ address: feed!, abi: feedAbi, functionName: "getRoundData", args: [rid] }) as const),
+            allowFailure: true,
+          });
+          let stopped = false;
+          for (const r of res) {
+            if (r.status !== "success") continue;
+            const [rid, answer, , updatedAt] = r.result as readonly [bigint, bigint, bigint, bigint, bigint];
+            if (updatedAt === 0n) continue;
+            const round = { id: rid, price: answer, t: Number(updatedAt) };
+            out.push(round);
+            if (stop(round)) {
+              stopped = true;
+              break;
+            }
+          }
+          if (stopped) break;
+        }
+        return out;
+      };
+
+      // 1) newer rounds: walk back from latest until we reach what's cached (or, cold, until before the window)
+      const [latestId] = await client!.readContract({ address: feed!, abi: feedAbi, functionName: "latestRoundData" });
+      const newest = rounds[rounds.length - 1];
+      if (!newest || latestId > newest.id) {
+        const fresh = await walk(latestId, (r) => (newest ? r.id <= newest.id : r.t < fromSec));
+        rounds = merge(rounds, fresh);
+      }
+      // 2) older rounds: backfill until the window (plus one round before it) is covered
+      const oldest = rounds[0];
+      if (oldest && oldest.t >= fromSec) rounds = merge(rounds, await walk(oldest.id - 1n, (r) => r.t < fromSec));
+
+      rounds = rounds.slice(-MAX_ROUNDS);
+      roundCache.set(key, rounds);
+      const firstIn = rounds.findIndex((r) => r.t >= fromSec);
+      return firstIn === -1 ? rounds.slice(-1) : rounds.slice(Math.max(0, firstIn - 1));
+    },
+  });
+}
+
+function merge(a: FeedRound[], b: FeedRound[]) {
+  const byId = new Map<bigint, FeedRound>();
+  for (const r of a) byId.set(r.id, r);
+  for (const r of b) byId.set(r.id, r);
+  return [...byId.values()].sort((x, y) => x.t - y.t || (x.id < y.id ? -1 : 1));
+}
+
+// ---------------------------------------------------------------- CCIP price relay (SOL)
+
+/** State of a relayed asset: what's on Base vs what the source feed has, and the relay fee. */
+export function useRelayState(asset: Asset | undefined) {
+  const relayed = useReadContract({
+    address: asset?.feed,
+    abi: relayedFeedAbi,
+    functionName: "latestRoundData",
+    chainId: HUB_CHAIN.id,
+    query: { enabled: !!asset?.relay },
+  });
+  const quote = useReadContract({
+    address: asset?.relay?.relayer,
+    abi: feedRelayerAbi,
+    functionName: "quote",
+    chainId: asset?.source.chainId,
+    query: { enabled: !!asset?.relay },
+  });
+  if (!asset?.relay) return undefined;
+  return {
+    /** latest price stored on Base (undefined until the first relay lands) */
+    onHub: relayed.data ? { price: relayed.data[1], t: Number(relayed.data[3]), id: relayed.data[0] } : undefined,
+    hubLoading: relayed.isLoading,
+    fee: quote.data?.[0],
+    /** the source has a round the relayer hasn't sent yet */
+    hasNew: quote.data?.[1] ?? false,
+  };
 }
 
 export type BetLog = {

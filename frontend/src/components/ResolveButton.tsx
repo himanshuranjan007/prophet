@@ -2,7 +2,7 @@
 
 import { useConfig, useConnection, useReadContract, useSwitchChain } from "wagmi";
 import { waitForTransactionReceipt, writeContract } from "wagmi/actions";
-import { HUB_ADDRESS, HUB_CHAIN, Outcome, type Market } from "@/lib/config";
+import { HUB_ADDRESS, HUB_CHAIN, Outcome, assetByFeed, type Market } from "@/lib/config";
 import { hubAbi } from "@/lib/abi";
 import { useAction } from "@/lib/useAction";
 import { CrystalBall } from "./Doodles";
@@ -14,6 +14,7 @@ export function ResolveButton({ marketId, market, now, onDone }: { marketId: big
   const { chainId, isConnected } = useConnection();
   const { switchChainAsync } = useSwitchChain();
   const action = useAction();
+  const relayed = assetByFeed(market.feed)?.relay ? assetByFeed(market.feed) : undefined;
   const closed = now > 0 && now >= Number(market.closeTime);
   const oneSided = market.yesPool === 0n || market.noPool === 0n;
 
@@ -56,10 +57,17 @@ export function ResolveButton({ marketId, market, now, onDone }: { marketId: big
                 close.
               </>
             ) : (
-              <>
-                Waiting for Chainlink to publish its first price after close. This usually takes up to{" "}
-                <span className="num">20 minutes</span>.
-              </>
+              relayed ? (
+                <>
+                  Waiting for the first {relayed.symbol} price after close to reach Base. Relay it from the panel above; it lands in{" "}
+                  <span className="num">{relayed.relay!.lag}</span>.
+                </>
+              ) : (
+                <>
+                  Waiting for Chainlink to publish its first price after close. This usually takes up to{" "}
+                  <span className="num">20 minutes</span>.
+                </>
+              )
             )}
           </p>
         </div>

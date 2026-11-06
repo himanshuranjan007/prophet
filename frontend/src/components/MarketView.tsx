@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useConnection } from "wagmi";
-import { Outcome, type Market } from "@/lib/config";
+import { ASSETS, Outcome, assetByFeed, type Market } from "@/lib/config";
 import { countdown, fmtUsd, shortAddr } from "@/lib/format";
-import { useEthPrice, useMarket, useNow } from "@/lib/hooks";
+import { useAssetPrice, useMarket, useNow } from "@/lib/hooks";
 import { Activity } from "./Activity";
 import { BetPanel } from "./BetPanel";
 import { IconBack, Sparkle } from "./Doodles";
 import { PoolBar } from "./PoolBar";
+import { PriceChart } from "./PriceChart";
+import { RelayStatus } from "./RelayStatus";
 import { Positions } from "./Positions";
 import { ResolveButton } from "./ResolveButton";
 import { ShareChallenge } from "./ShareChallenge";
@@ -24,7 +26,8 @@ const hhmm = (t: bigint) => new Date(Number(t) * 1000).toLocaleTimeString([], { 
 export function MarketView({ id, side, from }: { id: string; side?: "yes" | "no"; from?: string }) {
   const marketId = BigInt(id);
   const { market, isLoading, refetch } = useMarket(marketId);
-  const price = useEthPrice();
+  const asset = market ? (assetByFeed(market.feed) ?? ASSETS[0]) : undefined;
+  const price = useAssetPrice(asset);
   const now = useNow();
   const { address } = useConnection();
 
@@ -70,10 +73,20 @@ export function MarketView({ id, side, from }: { id: string; side?: "yes" | "no"
               {winner} won
             </span>
           )}
-          <PriceLine market={market} price={price?.price} />
+          <PriceLine market={market} price={price?.price} symbol={asset!.symbol} />
         </div>
 
-        <div className="mt-6">
+        <div className="mt-8">
+          <PriceChart asset={asset!} market={market} now={now} />
+        </div>
+
+        {asset!.relay && (
+          <div className="mt-4">
+            <RelayStatus asset={asset!} now={now} />
+          </div>
+        )}
+
+        <div className="mt-8">
           <PoolBar market={market} big />
         </div>
       </div>
@@ -110,7 +123,7 @@ export function MarketView({ id, side, from }: { id: string; side?: "yes" | "no"
 }
 
 /** "ETH $2,236.19 · $3.81 below the $2,240 strike", or the settled price once resolved. */
-function PriceLine({ market, price }: { market: Market; price?: bigint }) {
+function PriceLine({ market, price, symbol }: { market: Market; price?: bigint; symbol: string }) {
   if (market.outcome === Outcome.Invalid) {
     const oneSided = market.yesPool === 0n || market.noPool === 0n;
     return (
@@ -127,7 +140,7 @@ function PriceLine({ market, price }: { market: Market; price?: bigint }) {
   if (value === undefined)
     return (
       <span className="skeleton block h-6 w-80 max-w-full" role="status">
-        <span className="sr-only">Loading ETH price</span>
+        <span className="sr-only">Loading {symbol} price</span>
       </span>
     );
 
@@ -135,7 +148,7 @@ function PriceLine({ market, price }: { market: Market; price?: bigint }) {
   const abs = diff < 0n ? -diff : diff;
   return (
     <p className="num text-base sm:text-lg">
-      {settled ? "Settled at" : "ETH"} <span className="font-bold">{fmtUsd(value)}</span>
+      {settled ? "Settled at" : symbol} <span className="font-bold">{fmtUsd(value)}</span>
       <span className="text-muted"> · </span>
       {diff === 0n ? (
         <>exactly at the {fmtUsd(market.strike)} strike</>

@@ -70,6 +70,59 @@ export const NETS: Net[] = [
   },
 ];
 
+// ===================================================================== assets
+
+export type AssetSymbol = "ETH" | "BTC" | "SOL";
+
+export type Asset = {
+  symbol: AssetSymbol;
+  name: string;
+  /** Feed the hub settles markets on (always on Base Sepolia). */
+  feed: Address;
+  /** The real Chainlink Data Feed: charts and live prices read from here. */
+  source: { chainId: AppChain["id"]; feed: Address };
+  /** Set when `feed` is a RelayedFeed mirror fed over CCIP from `source`. */
+  relay?: { relayer: Address; lag: string };
+  /** Rounding for the default strike in the create form. */
+  strikeStep: number;
+  /** Feed's update rule, shown under charts. */
+  cadence: string;
+};
+
+export const ASSETS: Asset[] = [
+  {
+    symbol: "ETH",
+    name: "Ether",
+    feed: ETH_USD_FEED,
+    source: { chainId: baseSepolia.id, feed: ETH_USD_FEED },
+    strikeStep: 10,
+    cadence: "updates on 0.15% moves or every 20 min",
+  },
+  {
+    symbol: "BTC",
+    name: "Bitcoin",
+    feed: "0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298",
+    source: { chainId: baseSepolia.id, feed: "0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298" },
+    strikeStep: 100,
+    cadence: "updates on 0.1% moves or every 20 min",
+  },
+  {
+    symbol: "SOL",
+    name: "Solana",
+    // RelayedFeed on Base, fed by FeedRelayer on Arbitrum Sepolia over CCIP
+    feed: "0x61053fdf7ab0f5681060309ED5a8dA7A24616A9A",
+    source: { chainId: arbitrumSepolia.id, feed: "0x32377717BC9F9bA8Db45A244bCE77e7c0Cc5A775" },
+    relay: { relayer: "0x7d043Ca653CC66bB472f4F5FE84E91E69C90Ed8F", lag: "~25 min" },
+    strikeStep: 0.5,
+    cadence: "updates on 0.5% moves or every 24 h",
+  },
+];
+
+export const assetBySymbol = (s: AssetSymbol) => ASSETS.find((a) => a.symbol === s)!;
+/** Asset for a market's feed; unknown feeds fall back to a generic label. */
+export const assetByFeed = (feed: Address): Asset | undefined =>
+  ASSETS.find((a) => a.feed.toLowerCase() === feed.toLowerCase());
+
 export const netByChainId = (id?: number) => NETS.find((n) => n.chain.id === id);
 export const netBySelector = (sel: bigint) => NETS.find((n) => n.positionSelector === sel);
 
