@@ -51,7 +51,7 @@ export const NETS: Net[] = [
     entry: "0xA278b4Df096E8596c9f23c86540ef489678bae7b",
     bnm: "0xA8C0c11bf64AF62CDCA6f93D3769B88BdD7cb93D",
     isHub: false,
-    color: "#28a0f0",
+    color: "#14b8a6",
     eta: "~25 min",
     rpc: "https://sepolia-rollup.arbitrum.io/rpc",
   },
