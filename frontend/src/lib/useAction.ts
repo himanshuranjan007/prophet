@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { BaseError } from "viem";
 
-/** Runs a multi-step async tx flow with a human-readable step label and error. */
+/** Runs a multi-step tx flow with a readable step label + error; refreshes every on-chain read when done. */
 export function useAction() {
+  const qc = useQueryClient();
   const [step, setStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   async function run(fn: (setStep: (s: string) => void) => Promise<void>) {
     setError(null);
-    setStep("Starting…");
+    setStep("starting…");
     try {
       await fn(setStep);
     } catch (e) {
@@ -17,6 +19,8 @@ export function useAction() {
       setError(msg.length > 220 ? msg.slice(0, 220) + "…" : msg);
     } finally {
       setStep(null);
+      // positions, pools, activity, balances: all stale after any tx
+      void qc.invalidateQueries();
     }
   }
   return { run, step, busy: step !== null, error, clearError: () => setError(null) };

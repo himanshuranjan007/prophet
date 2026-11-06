@@ -1,58 +1,205 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ tokens
+   Light = notebook paper + ink. Dark = chalkboard + chalk. */
 :root {
-  --background: #f7f7f9;
-  --foreground: #14141a;
-  --card: #ffffff;
-  --line: #e4e4ea;
-  --muted: #6b6b78;
-  --accent: #375bd2;
-  --yes: #16a34a;
-  --no: #dc2626;
+  --paper: #fbf5e6;
+  --paper-dot: #e6dcc3;
+  --card: #fffdf6;
+  --ink: #23201b;
+  --line: #23201b26;
+  --muted: #736b5c;
+  --accent: #2b59c3; /* blue ballpoint */
+  --yes: #2f9e44; /* green marker */
+  --no: #e03131; /* red marker */
+  --hl: #ffd43b; /* yellow highlighter */
+  --pink: #f06595;
+  --on-color: #fffdf6;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0b0b10;
-    --foreground: #ececf1;
-    --card: #14141c;
-    --line: #262633;
-    --muted: #8b8b9a;
-    --accent: #4c6fff;
-    --yes: #22c55e;
-    --no: #f05252;
+    --paper: #1e2421;
+    --paper-dot: #2c3430;
+    --card: #252c28;
+    --ink: #eeebe0;
+    --line: #eeebe02e;
+    --muted: #a9b0a6;
+    --accent: #7cb7ff;
+    --yes: #7fd88f;
+    --no: #ff8a8a;
+    --hl: #e3c34a;
+    --pink: #f7a1c0;
+    --on-color: #1e2421;
   }
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
   --color-card: var(--card);
+  --color-ink: var(--ink);
   --color-line: var(--line);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-yes: var(--yes);
   --color-no: var(--no);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-hl: var(--hl);
+  --color-pink: var(--pink);
+  --color-on-color: var(--on-color);
+  --font-sans: var(--font-body), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-caveat), cursive;
+  --font-hand: var(--font-patrick), var(--font-body), cursive;
+}
+
+/* ------------------------------------------------------------------ base */
+html {
+  color-scheme: light dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background-color: var(--paper);
+  /* notebook dot grid */
+  background-image: radial-gradient(var(--paper-dot) 1.2px, transparent 1.3px);
+  background-size: 22px 22px;
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--hl);
+  color: #23201b;
+}
+
+/* ------------------------------------------------------------------ sketch kit */
+
+/* Wobbly hand-drawn outline: asymmetric radii read as a pen line, not a CSS box. */
+@utility sketch {
+  border: 2px solid var(--ink);
+  border-radius: 255px 18px 225px 16px / 16px 225px 18px 255px;
+}
+@utility sketch-alt {
+  border: 2px solid var(--ink);
+  border-radius: 18px 225px 16px 255px / 255px 16px 225px 18px;
 }
 
 @utility card {
-  @apply rounded-xl border border-line bg-card;
+  @apply sketch bg-card;
+  box-shadow: 4px 5px 0 var(--ink);
+}
+
+@utility tilt-l {
+  transform: rotate(-0.8deg);
+}
+@utility tilt-r {
+  transform: rotate(0.7deg);
+}
+
+@utility font-display {
+  font-family: var(--font-caveat), cursive;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+@utility font-hand {
+  font-family: var(--font-patrick), var(--font-body), cursive;
+}
+
+/* marker swipe behind text */
+@utility highlight {
+  background: linear-gradient(
+    100deg,
+    transparent 2%,
+    color-mix(in srgb, var(--hl) 85%, transparent) 4%,
+    color-mix(in srgb, var(--hl) 70%, transparent) 94%,
+    transparent 97%
+  );
+  background-size: 100% 46%;
+  background-position: 0 82%;
+  background-repeat: no-repeat;
+  padding: 0 0.15em;
+}
+
+/* hatched marker fill */
+@utility hatch-yes {
+  background: repeating-linear-gradient(-45deg, var(--yes) 0 5px, color-mix(in srgb, var(--yes) 55%, transparent) 5px 8px);
+}
+@utility hatch-no {
+  background: repeating-linear-gradient(45deg, var(--no) 0 5px, color-mix(in srgb, var(--no) 55%, transparent) 5px 8px);
 }
 
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+  @apply sketch inline-flex items-center justify-center gap-2 px-3.5 py-2 text-[1.05rem] leading-tight transition-transform duration-100;
+  font-family: var(--font-patrick), var(--font-body), cursive;
+  box-shadow: 2px 3px 0 var(--ink);
+  &:hover:not(:disabled) {
+    transform: translate(-1px, -1px) rotate(-0.6deg);
+    box-shadow: 3px 4px 0 var(--ink);
+  }
+  &:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--ink);
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 }
 @utility btn-primary {
-  @apply btn bg-accent text-white hover:brightness-110;
+  @apply btn bg-accent text-on-color;
 }
 @utility btn-ghost {
-  @apply btn border border-line hover:bg-line/40;
+  @apply btn bg-card text-ink;
+}
+
+@utility field {
+  @apply sketch-alt bg-card px-3 py-2 outline-none;
+  font-family: var(--font-patrick), var(--font-body), cursive;
+  font-size: 1.1rem;
+  &:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hl) 80%, transparent);
+  }
+}
+
+@utility chip {
+  @apply sketch-alt inline-flex items-center gap-1 px-2 py-0.5 text-sm;
+  font-family: var(--font-patrick), var(--font-body), cursive;
+  border-width: 1.5px;
+}
+
+/* pen-stroke draw-in for doodles */
+@keyframes draw {
+  from {
+    stroke-dashoffset: var(--len, 400);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@utility draw-in {
+  stroke-dasharray: var(--len, 400);
+  stroke-dashoffset: var(--len, 400);
+  animation: draw 0.9s ease-out 0.15s forwards;
+}
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+@utility wiggle {
+  animation: wiggle 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draw-in {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .wiggle {
+    animation: none;
+  }
 }

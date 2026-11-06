@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { usePublicClient, useReadContract, useReadContracts } from "wagmi";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { parseAbiItem, type Address } from "viem";
 import { ETH_USD_FEED, HUB_ADDRESS, HUB_CHAIN, HUB_DEPLOY_BLOCK, type Market } from "./config";
 import { feedAbi, hubAbi } from "./abi";
@@ -40,12 +40,17 @@ export function useMarkets() {
   const n = Number(count.data ?? 0n);
   const markets = useReadContracts({
     contracts: Array.from({ length: n }, (_, i) => ({ ...hub, functionName: "getMarket", args: [BigInt(i)] }) as const),
-    query: { enabled: n > 0 },
+    query: { enabled: n > 0, placeholderData: keepPreviousData },
   });
   const list = (markets.data ?? [])
     .map((r, id) => (r.status === "success" ? { id, ...(r.result as Market) } : null))
     .filter(Boolean) as (Market & { id: number })[];
-  return { list: list.reverse(), isLoading: count.isLoading || markets.isLoading, refetch: markets.refetch };
+  // count first, so a just-created market is included in the batch read
+  const refetch = async () => {
+    await count.refetch();
+    await markets.refetch();
+  };
+  return { list: list.reverse(), isLoading: count.isLoading || (n > 0 && markets.isLoading), refetch };
 }
 
 export function useMarket(id: bigint) {
@@ -102,20 +107,21 @@ export function useBetLogs(marketId: bigint) {
   });
 }
 
-// ---------------------------------------------------------------- in-flight CCIP bets (localStorage)
+// ---------------------------------------------------------------- in-flight CCIP messages (localStorage)
 export type Pending = {
+  kind: "bet" | "claim";
   srcTx: `0x${string}`;
+  /** CCIP messageId from the spoke's BetSent/ClaimSent event; equals the hub's BetPlaced.ccipMessageId. */
+  msgId?: `0x${string}`;
   chainId: number;
   marketId: string;
   user: Address;
-  yes: boolean;
-  amount: string;
-  /** hub position (yes+no) for this user/chain at submit time; landed when it grows by `amount`. */
-  baseline: string;
+  yes?: boolean;
+  amount?: string;
   at: number;
 };
 
-const KEY = "crosscall.pending";
+const KEY = "prophet.pending.v2";
 const listeners = new Set<() => void>();
 let cache: Pending[] | null = null;
 

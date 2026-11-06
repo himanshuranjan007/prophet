@@ -5,6 +5,7 @@ import { waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { HUB_ADDRESS, HUB_CHAIN, Outcome, type Market } from "@/lib/config";
 import { hubAbi } from "@/lib/abi";
 import { useAction } from "@/lib/useAction";
+import { CrystalBall } from "./Doodles";
 
 /** Anyone can settle a closed market against the first Data Feed round after close. */
 export function ResolveButton({ marketId, market, now, onDone }: { marketId: bigint; market: Market; now: number; onDone?: () => void }) {
@@ -12,7 +13,7 @@ export function ResolveButton({ marketId, market, now, onDone }: { marketId: big
   const { chainId, isConnected } = useConnection();
   const { switchChainAsync } = useSwitchChain();
   const action = useAction();
-  const closed = now >= Number(market.closeTime);
+  const closed = now > 0 && now >= Number(market.closeTime);
   const oneSided = market.yesPool === 0n || market.noPool === 0n;
 
   const round = useReadContract({
@@ -30,31 +31,34 @@ export function ResolveButton({ marketId, market, now, onDone }: { marketId: big
 
   const resolve = () =>
     action.run(async (step) => {
-      step("Switching to Base…");
+      step("switching to Base…");
       if (chainId !== HUB_CHAIN.id) await switchChainAsync({ chainId: HUB_CHAIN.id });
-      step("Confirm in your wallet…");
+      step("confirm in your wallet…");
       const h = await writeContract(config, { address: HUB_ADDRESS, abi: hubAbi, functionName: "resolve", args: [marketId, roundId], chainId: HUB_CHAIN.id });
-      step("Settling…");
+      step("reading the ball…");
       await waitForTransactionReceipt(config, { hash: h, chainId: HUB_CHAIN.id });
       onDone?.();
     });
 
   return (
-    <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
-      <div className="text-sm">
-        <div className="font-medium">Market closed</div>
-        <div className="text-xs text-muted">
-          {oneSided
-            ? "Only one side has bets, so it settles as void and everyone gets refunded."
-            : ready
-              ? `Settles on Chainlink round ${(roundId & ((1n << 64n) - 1n)).toString()}, the first price published after close.`
-              : "Waiting for the Chainlink feed to publish its first price after close…"}
+    <div className="card -rotate-[0.6deg] flex flex-wrap items-center justify-between gap-4 bg-hl/25 p-5">
+      <div className="flex items-center gap-3">
+        <CrystalBall className="wiggle h-12 w-12 shrink-0 text-accent" />
+        <div>
+          <div className="font-display text-3xl">Time&apos;s up!</div>
+          <div className="font-hand text-lg text-muted">
+            {oneSided
+              ? "only one side showed up, so it settles void and everyone gets refunded."
+              : ready
+                ? `settles on Chainlink round ${(roundId & ((1n << 64n) - 1n)).toString()}, the first price after close.`
+                : "waiting for Chainlink to publish its first price after close…"}
+          </div>
         </div>
       </div>
-      <button className="btn-primary" disabled={!ready || !isConnected || action.busy} onClick={resolve}>
-        {action.step ?? (isConnected ? "Resolve market" : "Connect to resolve")}
+      <button className="btn-primary rotate-1 text-xl" disabled={!ready || !isConnected || action.busy} onClick={resolve}>
+        {action.step ?? (isConnected ? "Reveal the answer" : "connect to resolve")}
       </button>
-      {action.error && <div className="w-full break-words text-xs text-no">{action.error}</div>}
+      {action.error && <div className="w-full break-words font-hand text-base text-no">{action.error}</div>}
     </div>
   );
 }

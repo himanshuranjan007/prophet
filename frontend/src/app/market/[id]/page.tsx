@@ -13,13 +13,13 @@ const validId = (id: string) => /^\d{1,9}$/.test(id);
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  if (!validId(id)) return { title: "Market not found · Crosscall" };
+  if (!validId(id)) return { title: "Market not found · Prophet" };
   const m = await getMarket(id);
-  if (!m) return { title: "Market not found · Crosscall" };
+  if (!m) return { title: "Market not found · Prophet" };
   const o = odds(m);
   const description = `YES ${o.yesPct.toFixed(0)}% · NO ${o.noPct.toFixed(0)}% · pool ${fmtToken(o.total)}. Bet from Base, Arbitrum or Ethereum. One pool via Chainlink CCIP.`;
   return {
-    title: `${m.question} · Crosscall`,
+    title: `${m.question} · Prophet`,
     description,
     openGraph: { title: m.question, description },
     twitter: { card: "summary_large_image", title: m.question, description },

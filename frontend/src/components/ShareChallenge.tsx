@@ -2,47 +2,56 @@
 
 import { useState } from "react";
 import { useConnection } from "wagmi";
+import { Sparkle } from "./Doodles";
 
-/** "I bet YES, take the other side": share link that preselects the opposite side for a friend. */
+/** "I called YES, dare you to take NO": share link preselecting the opposite side, on any chain. */
 export function ShareChallenge({ marketId, question }: { marketId: bigint; question: string }) {
   const { address } = useConnection();
-  const [copied, setCopied] = useState<string | null>(null);
+  const [copied, setCopied] = useState<"yes" | "no" | null>(null);
 
-  const link = (side: "yes" | "no") => {
+  // `mine` = the side the sharer took; the friend's link preselects the opposite side.
+  const link = (mine: "yes" | "no") => {
     const u = new URL(`/market/${marketId}`, window.location.origin);
-    u.searchParams.set("side", side === "yes" ? "no" : "yes"); // friend gets the opposite side
+    u.searchParams.set("side", mine === "yes" ? "no" : "yes");
     if (address) u.searchParams.set("from", address);
     return u.toString();
   };
 
-  async function copy(side: "yes" | "no") {
-    const url = link(side);
+  async function copy(mine: "yes" | "no") {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(link(mine));
     } catch {}
-    setCopied(side);
+    setCopied(mine);
     setTimeout(() => setCopied(null), 2000);
   }
 
-  const tweet = (side: "yes" | "no") =>
-    `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-      `I'm betting ${side.toUpperCase()} on "${question}". Take the other side from any chain 👇`,
-    )}&url=${encodeURIComponent(typeof window !== "undefined" ? link(side) : "")}`;
+  const post = (mine: "yes" | "no") => {
+    const text = `I'm calling ${mine.toUpperCase()} on "${question}". Dare you to take the other side, from any chain 🔮`;
+    window.open(
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(link(mine))}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  };
 
   return (
-    <div className="card p-4">
-      <div className="mb-1 text-sm font-medium">Challenge a friend</div>
-      <div className="mb-3 text-xs text-muted">Share a link that opens this market with the opposite side picked, on whatever chain they use.</div>
-      <div className="grid grid-cols-2 gap-2">
-        <button className="btn-ghost text-yes" onClick={() => copy("yes")}>
-          {copied === "yes" ? "Copied ✓" : "I'm YES · copy link"}
-        </button>
-        <button className="btn-ghost text-no" onClick={() => copy("no")}>
-          {copied === "no" ? "Copied ✓" : "I'm NO · copy link"}
-        </button>
-        <a className="btn-ghost col-span-2 text-xs" href={tweet("yes")} target="_blank" rel="noreferrer">
-          Post on X
-        </a>
+    <div className="card tilt-r relative p-5">
+      <Sparkle className="wiggle absolute -top-3 right-6 h-7 w-7 text-pink" />
+      <div className="mb-1 font-display text-3xl">Dare a friend</div>
+      <div className="mb-4 font-hand text-lg text-muted">
+        send a link with the other side already picked. They can bet from whatever chain they&apos;re on.
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {(["yes", "no"] as const).map((s) => (
+          <div key={s} className="flex flex-col gap-2">
+            <button className={`btn-ghost ${s === "yes" ? "-rotate-1 text-yes" : "rotate-1 text-no"}`} onClick={() => copy(s)}>
+              {copied === s ? "copied ✔" : `I'm ${s.toUpperCase()} · copy link`}
+            </button>
+            <button className="font-hand text-base text-muted underline decoration-wavy underline-offset-4 hover:text-ink" onClick={() => post(s)}>
+              post my {s.toUpperCase()} on X
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
