@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { formatUnits } from "viem";
 import { useBalance, useConnection, useDisconnect, useReadContract, useSwitchChain } from "wagmi";
@@ -128,6 +129,13 @@ function MenuBody({
           </a>
         )}
       </div>
+      <Link
+        href="/portfolio"
+        className="btn-ghost w-full"
+        onClick={() => (document.getElementById(popoverId) as HTMLElement & { hidePopover?: () => void })?.hidePopover?.()}
+      >
+        My positions
+      </Link>
 
       {/* balances on the current chain */}
       {net ? (

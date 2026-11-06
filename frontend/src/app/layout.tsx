@@ -41,7 +41,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                   <span className="status-dot" /> testnet · CCIP 2.0
                 </span>
               </Link>
-              <ConnectButton />
+              <nav aria-label="Main" className="flex items-center gap-2 sm:gap-3">
+                {/* on mobile the account menu's "My positions" link covers this */}
+                <Link href="/portfolio" className="btn-quiet max-sm:hidden">
+                  Positions
+                </Link>
+                <ConnectButton />
+              </nav>
             </div>
             <Rule className="block h-1.5 w-full text-line" />
           </header>

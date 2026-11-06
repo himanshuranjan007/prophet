@@ -29,6 +29,10 @@ export type Net = {
   rpc: string;
   /** Fallback RPC (also used for eth_getLogs where the primary limits log ranges). */
   rpcFallback?: string;
+  /** RPC used for eth_getLogs scans (full ranges; may differ from the read RPC). */
+  logsRpc: string;
+  /** Block the entry contract (hub / spoke) was deployed at: log scans start here. */
+  deployBlock: bigint;
 };
 
 export const NETS: Net[] = [
@@ -45,6 +49,8 @@ export const NETS: Net[] = [
     eta: "instant",
     rpc: "https://sepolia.base.org", // fastest for multicall reads; caps eth_getLogs ranges
     rpcFallback: "https://base-sepolia-rpc.publicnode.com", // full-range logs
+    logsRpc: "https://base-sepolia-rpc.publicnode.com",
+    deployBlock: 55174485n,
   },
   {
     chain: arbitrumSepolia,
@@ -58,6 +64,8 @@ export const NETS: Net[] = [
     color: "#14b8a6",
     eta: "~25 min",
     rpc: "https://sepolia-rollup.arbitrum.io/rpc",
+    logsRpc: "https://sepolia-rollup.arbitrum.io/rpc",
+    deployBlock: 326578887n,
   },
   {
     chain: sepolia,
@@ -71,6 +79,8 @@ export const NETS: Net[] = [
     color: "#a78bfa",
     eta: "~20 min",
     rpc: "https://ethereum-sepolia-rpc.publicnode.com",
+    logsRpc: "https://ethereum-sepolia-rpc.publicnode.com",
+    deployBlock: 12075637n,
   },
 ];
 

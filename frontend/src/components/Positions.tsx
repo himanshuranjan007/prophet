@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { parseEventLogs } from "viem";
-import { useConfig, useConnection, useReadContracts, useSwitchChain } from "wagmi";
-import { readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
+import Link from "next/link";
+import { useEffect } from "react";
+import { useConnection, useReadContracts } from "wagmi";
 import { HUB_ADDRESS, HUB_CHAIN, NETS, Outcome, ccipExplorerTx, type Market, type Net } from "@/lib/config";
-import { hubAbi, spokeAbi } from "@/lib/abi";
+import { hubAbi } from "@/lib/abi";
 import { fmtToken } from "@/lib/format";
 import { useBetLogs, usePending } from "@/lib/hooks";
-import { useAction } from "@/lib/useAction";
+import { useClaim } from "@/lib/useClaim";
 import { ChainDot } from "./ChainDot";
-import { IconCheck, IconPlane, IconReturn } from "./Doodles";
+import { IconCheck, IconChevron, IconPlane, IconReturn } from "./Doodles";
 import { ActionError, ExternalLink } from "./ui";
 
 /** Minutes after which an un-landed cross-chain bet on a closed market is presumed refunded. */
@@ -33,12 +32,9 @@ function Track({ href }: { href: string }) {
 }
 
 export function Positions({ marketId, market, now }: { marketId: bigint; market: Market; now: number }) {
-  const config = useConfig();
-  const { address, chainId } = useConnection();
-  const { switchChainAsync } = useSwitchChain();
-  const action = useAction();
-  // which row's claim is running, so only that button shows the step text
-  const [busyChain, setBusyChain] = useState<number | null>(null);
+  const { address } = useConnection();
+  // shared with the portfolio page: one claim flow (hub direct / spoke via CCIP)
+  const { claim: claimFor, action, isBusy } = useClaim();
   const pending = usePending();
   const logs = useBetLogs(marketId);
 
@@ -90,29 +86,7 @@ export function Positions({ marketId, market, now }: { marketId: bigint; market:
   const resolved = market.outcome !== Outcome.Unresolved;
   const closed = now >= Number(market.closeTime);
 
-  const claim = (n: Net) => {
-    setBusyChain(n.chain.id);
-    return action.run(async (step) => {
-      step(`Switching to ${n.short}…`);
-      if (chainId !== n.chain.id) await switchChainAsync({ chainId: n.chain.id });
-      if (n.isHub) {
-        step("Confirm your claim…");
-        const h = await writeContract(config, { address: HUB_ADDRESS, abi: hubAbi, functionName: "claim", args: [marketId], chainId: n.chain.id });
-        step("Paying out…");
-        await waitForTransactionReceipt(config, { hash: h, chainId: n.chain.id });
-      } else {
-        step("Quoting the CCIP fee…");
-        const fee = await readContract(config, { address: n.entry, abi: spokeAbi, functionName: "quoteClaim", args: [marketId], chainId: n.chain.id, account: address });
-        step("Confirm your claim…");
-        const h = await writeContract(config, { address: n.entry, abi: spokeAbi, functionName: "claim", args: [marketId], value: (fee * 12n) / 10n, chainId: n.chain.id });
-        step("Sending over CCIP…");
-        const r = await waitForTransactionReceipt(config, { hash: h, chainId: n.chain.id });
-        const sent = parseEventLogs({ abi: spokeAbi, logs: r.logs, eventName: "ClaimSent" })[0];
-        // persisted, so the button stays hidden (no double fee) until the hub marks it claimed
-        pending.add({ kind: "claim", srcTx: h, msgId: sent?.args.messageId, chainId: n.chain.id, marketId: marketId.toString(), user: address!, at: Math.floor(Date.now() / 1000) });
-      }
-    });
-  };
+  const claim = (n: Net) => claimFor(marketId, n);
 
   return (
     <section className="card p-6">
@@ -122,7 +96,7 @@ export function Positions({ marketId, market, now }: { marketId: bigint; market:
           .filter((r) => r.pos && (r.pos.yes > 0n || r.pos.no > 0n))
           .map(({ n, pos, claimable }) => {
             const inflight = claimInFlight(n);
-            const stepHere = action.busy && busyChain === n.chain.id;
+            const stepHere = isBusy(marketId, n);
             return (
               <li key={n.chain.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -203,6 +177,12 @@ export function Positions({ marketId, market, now }: { marketId: bigint; market:
         </p>
       )}
       {!resolved && closed && <p className="mt-4 text-xs text-muted">Betting is closed. Resolve the market to unlock claims.</p>}
+      <div className="mt-4">
+        <Link href="/portfolio" className="btn-quiet -ml-2">
+          All your positions
+          <IconChevron className="h-4 w-4" />
+        </Link>
+      </div>
     </section>
   );
 }
