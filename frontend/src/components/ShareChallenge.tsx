@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useConnection } from "wagmi";
-import { Sparkle } from "./Doodles";
+import { IconCheck, IconCopy, IconExternal } from "./Doodles";
 
 /** "I called YES, dare you to take NO": share link preselecting the opposite side, on any chain. */
 export function ShareChallenge({ marketId, question }: { marketId: bigint; question: string }) {
@@ -26,7 +26,7 @@ export function ShareChallenge({ marketId, question }: { marketId: bigint; quest
   }
 
   const post = (mine: "yes" | "no") => {
-    const text = `I'm calling ${mine.toUpperCase()} on "${question}". Dare you to take the other side, from any chain 🔮`;
+    const text = `I'm calling ${mine.toUpperCase()} on "${question}". Dare you to take the other side, from any chain.`;
     window.open(
       `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(link(mine))}`,
       "_blank",
@@ -35,24 +35,39 @@ export function ShareChallenge({ marketId, question }: { marketId: bigint; quest
   };
 
   return (
-    <div className="card tilt-r relative p-5">
-      <Sparkle className="wiggle absolute -top-3 right-6 h-7 w-7 text-pink" />
-      <div className="mb-1 font-display text-3xl">Dare a friend</div>
-      <div className="mb-4 font-hand text-lg text-muted">
-        send a link with the other side already picked. They can bet from whatever chain they&apos;re on.
+    <section className="@container card space-y-4 p-6">
+      <div>
+        <h2 className="font-display text-head">Dare a friend</h2>
+        <p className="mt-1 text-sm text-muted">Send a link with the other side already picked. They can bet from any chain.</p>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        {(["yes", "no"] as const).map((s) => (
-          <div key={s} className="flex flex-col gap-2">
-            <button className={`btn-ghost ${s === "yes" ? "-rotate-1 text-yes" : "rotate-1 text-no"}`} onClick={() => copy(s)}>
-              {copied === s ? "copied ✔" : `I'm ${s.toUpperCase()} · copy link`}
-            </button>
-            <button className="font-hand text-base text-muted underline decoration-wavy underline-offset-4 hover:text-ink" onClick={() => post(s)}>
-              post my {s.toUpperCase()} on X
-            </button>
-          </div>
-        ))}
+      <div className="grid gap-4 @md:grid-cols-2 @md:gap-3">
+        {(["yes", "no"] as const).map((s) => {
+          const word = s.toUpperCase();
+          return (
+            <div key={s} className="flex flex-col items-center gap-1">
+              <button className="btn-ghost w-full" onClick={() => copy(s)} aria-live="polite">
+                {copied === s ? (
+                  <>
+                    <IconCheck className="h-4 w-4" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <IconCopy className="h-4 w-4" />
+                    <span>
+                      I picked <span className={s === "yes" ? "text-yes" : "text-no"}>{word}</span> · copy link
+                    </span>
+                  </>
+                )}
+              </button>
+              <button className="btn-quiet" onClick={() => post(s)} aria-label={`Post my ${word} pick on X`}>
+                Post on X
+                <IconExternal className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }

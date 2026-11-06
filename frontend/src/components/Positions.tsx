@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { parseEventLogs } from "viem";
 import { useConfig, useConnection, useReadContracts, useSwitchChain } from "wagmi";
 import { readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
@@ -10,15 +10,35 @@ import { fmtToken } from "@/lib/format";
 import { useBetLogs, usePending } from "@/lib/hooks";
 import { useAction } from "@/lib/useAction";
 import { ChainDot } from "./ChainDot";
+import { IconCheck, IconPlane, IconReturn } from "./Doodles";
+import { ActionError, ExternalLink } from "./ui";
 
 /** Minutes after which an un-landed cross-chain bet on a closed market is presumed refunded. */
 const REFUND_GRACE_MIN = 45;
+
+function Stake({ amount, yes }: { amount: bigint; yes: boolean }) {
+  return (
+    <span className={`num font-semibold ${yes ? "text-yes" : "text-no"}`}>
+      {fmtToken(amount)} {yes ? "YES" : "NO"}
+    </span>
+  );
+}
+
+function Track({ href }: { href: string }) {
+  return (
+    <ExternalLink href={href} className="text-sm">
+      Track
+    </ExternalLink>
+  );
+}
 
 export function Positions({ marketId, market, now }: { marketId: bigint; market: Market; now: number }) {
   const config = useConfig();
   const { address, chainId } = useConnection();
   const { switchChainAsync } = useSwitchChain();
   const action = useAction();
+  // which row's claim is running, so only that button shows the step text
+  const [busyChain, setBusyChain] = useState<number | null>(null);
   const pending = usePending();
   const logs = useBetLogs(marketId);
 
@@ -70,61 +90,79 @@ export function Positions({ marketId, market, now }: { marketId: bigint; market:
   const resolved = market.outcome !== Outcome.Unresolved;
   const closed = now >= Number(market.closeTime);
 
-  const claim = (n: Net) =>
-    action.run(async (step) => {
-      step(`switching to ${n.short}…`);
+  const claim = (n: Net) => {
+    setBusyChain(n.chain.id);
+    return action.run(async (step) => {
+      step(`Switching to ${n.short}…`);
       if (chainId !== n.chain.id) await switchChainAsync({ chainId: n.chain.id });
       if (n.isHub) {
-        step("confirm your claim…");
+        step("Confirm your claim…");
         const h = await writeContract(config, { address: HUB_ADDRESS, abi: hubAbi, functionName: "claim", args: [marketId], chainId: n.chain.id });
+        step("Paying out…");
         await waitForTransactionReceipt(config, { hash: h, chainId: n.chain.id });
       } else {
-        step("quoting the CCIP fee…");
+        step("Quoting the CCIP fee…");
         const fee = await readContract(config, { address: n.entry, abi: spokeAbi, functionName: "quoteClaim", args: [marketId], chainId: n.chain.id, account: address });
-        step("confirm your claim…");
+        step("Confirm your claim…");
         const h = await writeContract(config, { address: n.entry, abi: spokeAbi, functionName: "claim", args: [marketId], value: (fee * 12n) / 10n, chainId: n.chain.id });
+        step("Sending over CCIP…");
         const r = await waitForTransactionReceipt(config, { hash: h, chainId: n.chain.id });
         const sent = parseEventLogs({ abi: spokeAbi, logs: r.logs, eventName: "ClaimSent" })[0];
         // persisted, so the button stays hidden (no double fee) until the hub marks it claimed
         pending.add({ kind: "claim", srcTx: h, msgId: sent?.args.messageId, chainId: n.chain.id, marketId: marketId.toString(), user: address!, at: Math.floor(Date.now() / 1000) });
       }
     });
+  };
 
   return (
-    <div className="card tilt-r p-5">
-      <div className="mb-3 font-display text-3xl">Your calls</div>
-      <div className="space-y-2.5">
+    <section className="card p-6">
+      <h2 className="font-display text-head">Your positions</h2>
+      <ul className="mt-2 divide-y divide-dashed divide-line">
         {rows
           .filter((r) => r.pos && (r.pos.yes > 0n || r.pos.no > 0n))
           .map(({ n, pos, claimable }) => {
             const inflight = claimInFlight(n);
+            const stepHere = action.busy && busyChain === n.chain.id;
             return (
-              <div key={n.chain.id} className="sketch-alt flex flex-wrap items-center justify-between gap-2 bg-background/60 p-3">
-                <div className="flex items-center gap-3 font-hand text-lg">
+              <li key={n.chain.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <ChainDot net={n} />
-                  {pos!.yes > 0n && <span className="text-yes">{fmtToken(pos!.yes)} YES</span>}
-                  {pos!.no > 0n && <span className="text-no">{fmtToken(pos!.no)} NO</span>}
+                  {pos!.yes > 0n && <Stake amount={pos!.yes} yes />}
+                  {pos!.no > 0n && <Stake amount={pos!.no} yes={false} />}
                 </div>
-                {resolved &&
-                  (pos!.claimed ? (
-                    <span className="font-hand text-lg text-muted">paid ✔</span>
-                  ) : inflight ? (
-                    <span className="font-hand text-base text-muted">
-                      claim flying back ✈{" "}
-                      <a className="text-accent underline" href={ccipExplorerTx(inflight.srcTx)} target="_blank" rel="noreferrer">
-                        track
-                      </a>
-                    </span>
-                  ) : claimable === undefined || (reads.isFetching && claimable === 0n) ? (
-                    <span className="font-hand text-base text-muted">checking…</span>
-                  ) : claimable > 0n ? (
-                    <button className="btn-primary -rotate-1" disabled={action.busy} onClick={() => claim(n)}>
-                      {action.busy ? action.step : `Claim ${fmtToken(claimable)} on ${n.short}`}
-                    </button>
-                  ) : (
-                    <span className="font-hand text-lg text-muted line-through decoration-no decoration-2">no luck</span>
-                  ))}
-              </div>
+                {resolved && (
+                  <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-sm">
+                    {pos!.claimed ? (
+                      <span className="inline-flex items-center gap-1.5 font-semibold">
+                        <IconCheck className="h-4 w-4" />
+                        Paid
+                      </span>
+                    ) : inflight ? (
+                      <>
+                        <span className="inline-flex items-center gap-1.5 text-muted">
+                          <IconPlane className="wiggle h-4 w-4" />
+                          Payout in flight
+                        </span>
+                        <Track href={ccipExplorerTx(inflight.srcTx)} />
+                      </>
+                    ) : claimable === undefined || (reads.isFetching && claimable === 0n) ? (
+                      <span className="text-muted">Checking…</span>
+                    ) : claimable > 0n ? (
+                      <button className="btn-primary text-sm" disabled={action.busy} onClick={() => claim(n)}>
+                        {stepHere ? (
+                          action.step
+                        ) : (
+                          <span>
+                            Claim <span className="num">{fmtToken(claimable)}</span> on {n.short}
+                          </span>
+                        )}
+                      </button>
+                    ) : (
+                      <span className="text-muted">No payout</span>
+                    )}
+                  </div>
+                )}
+              </li>
             );
           })}
 
@@ -133,36 +171,38 @@ export function Positions({ marketId, market, now }: { marketId: bigint; market:
           const mins = Math.floor((now - p.at) / 60);
           const likelyRefunded = closed && mins > REFUND_GRACE_MIN;
           return (
-            <div key={p.srcTx} className="sketch flex flex-wrap items-center justify-between gap-2 border-dashed p-3 font-hand text-lg">
-              <div className="flex items-center gap-3">
-                <span className={likelyRefunded ? "" : "wiggle inline-block"}>{likelyRefunded ? "↩" : "✈"}</span>
+            <li key={p.srcTx} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1 py-3">
+              {likelyRefunded ? <IconReturn className="h-4 w-4 text-muted" /> : <IconPlane className="wiggle h-4 w-4" />}
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                 <ChainDot net={n} />
-                <span className={p.yes ? "text-yes" : "text-no"}>
-                  {fmtToken(BigInt(p.amount ?? "0"))} {p.yes ? "YES" : "NO"}
-                </span>
-                <span className="text-base text-muted">
-                  {likelyRefunded ? "landed after close, so it was refunded to " + n.short : `in the air · ${mins}m of ${n.eta}`}
-                </span>
+                <Stake amount={BigInt(p.amount ?? "0")} yes={!!p.yes} />
               </div>
-              <span className="flex items-center gap-3 text-base">
-                <a className="text-accent underline" href={ccipExplorerTx(p.srcTx)} target="_blank" rel="noreferrer">
-                  CCIP Explorer
-                </a>
-                {likelyRefunded && (
-                  <button className="text-muted underline" onClick={() => pending.remove(p.srcTx)}>
-                    dismiss
+              <div className="justify-self-end">
+                <Track href={ccipExplorerTx(p.srcTx)} />
+              </div>
+              {likelyRefunded ? (
+                <>
+                  <p className="col-start-2 text-sm text-muted">Landed after close, refunded to {n.short}</p>
+                  <button className="btn-quiet justify-self-end" onClick={() => pending.remove(p.srcTx)}>
+                    Dismiss
                   </button>
-                )}
-              </span>
-            </div>
+                </>
+              ) : (
+                <p className="col-span-2 col-start-2 text-sm text-muted">
+                  In flight · <span className="num">{mins}m</span> of <span className="num">{n.eta}</span>
+                </p>
+              )}
+            </li>
           );
         })}
-      </div>
-      {action.error && <div className="mt-2 break-words font-hand text-base text-no">{action.error}</div>}
+      </ul>
+      <ActionError action={action} className="mt-4" />
       {resolved && mine.some((p) => p.kind === "claim") && (
-        <div className="mt-3 font-hand text-base text-muted">cross-chain payouts land in your wallet once the CCIP message executes (~20–25 min).</div>
+        <p className="mt-4 text-xs text-muted">
+          Cross-chain payouts land in your wallet once the CCIP message executes (<span className="num">~20–25 min</span>).
+        </p>
       )}
-      {!resolved && closed && <div className="mt-3 font-hand text-base text-muted">market&apos;s closed. resolve it to unlock claims.</div>}
-    </div>
+      {!resolved && closed && <p className="mt-4 text-xs text-muted">Betting is closed. Resolve the market to unlock claims.</p>}
+    </section>
   );
 }

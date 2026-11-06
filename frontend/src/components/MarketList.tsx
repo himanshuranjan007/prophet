@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { NETS, Outcome } from "@/lib/config";
-import { countdown, fmtUsd, status } from "@/lib/format";
+import { countdown, fmtUsd } from "@/lib/format";
 import { useEthPrice, useMarkets, useNow } from "@/lib/hooks";
 import { ChainDot } from "./ChainDot";
 import { CreateMarket } from "./CreateMarket";
-import { Arrow, Hop, Sparkle, Star, Underline } from "./Doodles";
+import { IconClock, Sparkle, Underline } from "./Doodles";
 import { PoolBar } from "./PoolBar";
+import { StatusLabel } from "./ui";
+
+type ListedMarket = ReturnType<typeof useMarkets>["list"][number];
 
 export function MarketList() {
   const { list, isLoading, refetch } = useMarkets();
@@ -18,88 +21,101 @@ export function MarketList() {
   const rest = list.filter((m) => !open.includes(m));
 
   return (
-    <div className="space-y-10">
-      {/* ---------------- hero: laid out on a grid, then nudged off it */}
-      <section className="relative grid gap-6 pt-2 md:grid-cols-[1.35fr_1fr] md:items-center">
-        <div className="relative">
-          <Sparkle className="wiggle absolute -top-3 -left-2 h-6 w-6 text-pink" />
-          <h1 className="font-display text-6xl leading-[0.95] sm:text-7xl">
+    <div className="space-y-12">
+      {/* ---------------- hero */}
+      <section className="grid gap-8 pt-2 md:grid-cols-[1.35fr_1fr] lg:grid-cols-[1.75fr_1fr] md:items-center md:gap-10">
+        <div className="min-w-0">
+          <h1 className="font-display text-hero">
             Call it.
+            <Sparkle className="ml-2 inline-block h-6 w-6 align-top text-muted" />
             <br />
             <span className="relative inline-block">
               <span className="highlight">from any chain.</span>
-              <Underline className="absolute -bottom-3 left-0 h-4 w-full text-accent" />
+              <Underline className="absolute -bottom-3 left-0 h-3.5 w-full text-ink" />
             </span>
           </h1>
-          <p className="mt-6 max-w-xl text-[1.05rem] leading-relaxed text-muted">
-            Bet <b className="text-yes">YES</b> or <b className="text-no">NO</b> on where ETH lands. Bet from Base, Arbitrum or
-            Ethereum: <span className="text-ink">Chainlink CCIP</span> carries your stake to one shared pool, a{" "}
-            <span className="text-ink">Chainlink Data Feed</span> settles it, and winnings fly back to the chain you bet from.
+          <p className="mt-8 max-w-[38rem] leading-relaxed text-muted">
+            Bet <b className="font-semibold text-yes">YES</b> or <b className="font-semibold text-no">NO</b> from Base, Arbitrum
+            or Ethereum. Chainlink CCIP pools every stake on Base, a Chainlink Data Feed settles it, and winnings go back to
+            your chain.
           </p>
         </div>
 
-        <div className="card tilt-r relative p-5">
-          <Star className="absolute -top-4 -right-3 h-8 w-8 rotate-12 text-hl" />
-          <div className="mb-1 font-hand text-lg text-muted">ETH / USD right now</div>
-          <div className="font-display text-5xl">{price ? fmtUsd(price.price) : "…"}</div>
-          <div className="mt-4 flex items-center justify-between gap-2">
-            {NETS.map((n, i) => (
-              <div key={n.chain.id} className={`flex flex-col items-center ${i === 1 ? "translate-y-1" : ""}`}>
+        <div className="card p-6">
+          <div className="eyebrow mb-2">ETH / USD</div>
+          {price ? (
+            <div className="num text-4xl font-extrabold leading-none">{fmtUsd(price.price)}</div>
+          ) : (
+            <div className="skeleton h-9 w-44" aria-label="Loading price" />
+          )}
+          <div className="mt-2 text-sm text-muted">Settled by Chainlink Data Feeds</div>
+          <div className="rule my-4" />
+          <ul className="space-y-2.5">
+            {NETS.map((n) => (
+              <li key={n.chain.id} className="flex items-center justify-between gap-3">
                 <ChainDot net={n} />
-                <span className="font-hand text-sm text-muted">{n.isHub ? "the hub" : n.eta}</span>
-              </div>
+                <span className="num text-right text-sm text-muted">{n.isHub ? `the pool · ${n.eta}` : `via CCIP · ${n.eta}`}</span>
+              </li>
             ))}
-          </div>
-          <Hop className="mt-1 h-8 w-full text-muted" />
+          </ul>
         </div>
       </section>
 
-      {/* ---------------- markets */}
-      <div className="relative flex flex-wrap items-end justify-between gap-3">
-        <h2 className="font-display -rotate-1 text-4xl">
-          Live markets
-          <Arrow className="ml-2 hidden h-9 w-14 sm:inline-block -rotate-6 align-bottom text-muted" />
-        </h2>
-        <CreateMarket onCreated={refetch} />
-      </div>
+      {/* ---------------- live markets */}
+      <section className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-head">Live markets</h2>
+          <CreateMarket onCreated={refetch} />
+        </div>
 
-      {isLoading && <div className="font-hand text-lg text-muted">shuffling the cards…</div>}
-      {!isLoading && open.length === 0 && (
-        <div className="font-hand text-lg text-muted">No open markets right now. Make one ↑</div>
-      )}
-
-      <div className="grid gap-7 sm:grid-cols-2">
-        {open.map((m, i) => (
-          <MarketCard key={m.id} m={m} now={now} i={i} />
-        ))}
-      </div>
-
-      {rest.length > 0 && (
-        <>
-          <h2 className="font-display rotate-1 pt-2 text-3xl text-muted">Closed &amp; settled</h2>
-          <div className="grid gap-7 sm:grid-cols-2">
-            {rest.map((m, i) => (
-              <MarketCard key={m.id} m={m} now={now} i={i + 1} />
+        {isLoading ? (
+          <div className="grid gap-6 sm:grid-cols-2" aria-busy="true" aria-label="Loading markets">
+            <div className="skeleton h-44" />
+            <div className="skeleton h-44" />
+          </div>
+        ) : open.length === 0 ? (
+          <p className="text-muted">No open markets right now. Create one to get things going.</p>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2">
+            {open.map((m) => (
+              <MarketCard key={m.id} m={m} now={now} />
             ))}
           </div>
-        </>
+        )}
+      </section>
+
+      {/* ---------------- closed & settled */}
+      {rest.length > 0 && (
+        <section className="space-y-6">
+          <h2 className="font-display text-head text-muted">Closed &amp; settled</h2>
+          <div className="grid gap-6 sm:grid-cols-2">
+            {rest.map((m) => (
+              <MarketCard key={m.id} m={m} now={now} />
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );
 }
 
-function MarketCard({ m, now, i }: { m: ReturnType<typeof useMarkets>["list"][number]; now: number; i: number }) {
+function MarketCard({ m, now }: { m: ListedMarket; now: number }) {
   const openNow = m.outcome === Outcome.Unresolved && now < Number(m.closeTime);
   return (
     <Link
       href={`/market/${m.id}`}
-      className={`card group block p-5 transition-transform hover:-translate-y-1 hover:rotate-0 ${i % 2 ? "tilt-r" : "tilt-l"}`}
+      className="card flex h-full flex-col gap-4 p-5 transition-[translate,box-shadow] duration-(--dur-quick) ease-(--ease-out) hover:-translate-y-px hover:shadow-(--shadow-sm) motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:p-6"
     >
-      <div className="mb-2 flex items-center justify-between">
-        <span className={`chip ${openNow ? "bg-hl/60 text-ink" : "text-muted"}`}>{status(m, now)}</span>
-        {openNow && <span className="font-hand text-base text-muted">⏳ {countdown(m.closeTime, now)}</span>}
+      <div className="flex items-center justify-between gap-3">
+        <StatusLabel market={m} now={now} />
+        {openNow && (
+          <span className="inline-flex items-center gap-1.5 text-sm text-muted">
+            <IconClock className="h-4 w-4 shrink-0" />
+            <span className="num">{countdown(m.closeTime, now)}</span>
+          </span>
+        )}
       </div>
-      <div className="mb-4 font-display text-[1.9rem] leading-tight">{m.question}</div>
+      <div className="flex-1 font-display text-[1.6rem] leading-tight break-words">{m.question}</div>
       <PoolBar market={m} />
     </Link>
   );

@@ -1,27 +1,41 @@
 import type { Market } from "@/lib/config";
 import { fmtToken, odds } from "@/lib/format";
 
-/** Two hatched marker strokes inside a wobbly pen outline. */
+/** Two hatched marker strokes inside a pen outline. */
 export function PoolBar({ market, big = false }: { market: Pick<Market, "yesPool" | "noPool">; big?: boolean }) {
   const o = odds(market);
+  const yesPct = o.yesPct.toFixed(0);
+  const noPct = o.noPct.toFixed(0);
   return (
     <div>
-      <div className={`mb-1.5 flex justify-between font-hand ${big ? "text-xl" : "text-lg"}`}>
-        <span className="text-yes">
-          YES {o.yesPct.toFixed(0)}%{o.yesMult ? <span className="text-muted"> · pays {o.yesMult.toFixed(2)}x</span> : null}
+      <div className={`mb-2 flex items-baseline justify-between gap-3 ${big ? "text-lg" : "text-base"}`}>
+        <span className="num font-bold text-yes">
+          YES {yesPct}%
+          {o.yesMult ? (
+            <span className="num hidden text-sm font-normal text-muted sm:inline"> · pays {o.yesMult.toFixed(2)}x</span>
+          ) : null}
         </span>
-        <span className="text-no">
-          {o.noMult ? <span className="text-muted">pays {o.noMult.toFixed(2)}x · </span> : null}
-          {o.noPct.toFixed(0)}% NO
+        <span className="num text-right font-bold text-no">
+          {o.noMult ? (
+            <span className="num hidden text-sm font-normal text-muted sm:inline">pays {o.noMult.toFixed(2)}x · </span>
+          ) : null}
+          {noPct}% NO
         </span>
       </div>
-      <div className={`sketch flex overflow-hidden bg-card ${big ? "h-6" : "h-4"}`}>
-        <div className="hatch-yes transition-all duration-500" style={{ width: `${o.yesPct}%` }} />
-        <div className="w-[2px] shrink-0 bg-ink" />
-        <div className="hatch-no flex-1 transition-all duration-500" />
+      <div
+        className={`sketch-thin flex overflow-hidden bg-card ${big ? "h-4" : "h-3"}`}
+        role="img"
+        aria-label={`Pool split: YES ${yesPct}%, NO ${noPct}%`}
+      >
+        <div
+          className="hatch-yes transition-[width] duration-(--dur-slow) ease-(--ease-ink) motion-reduce:transition-none"
+          style={{ width: `${o.yesPct}%` }}
+        />
+        <div className="w-[1.5px] shrink-0 bg-ink" />
+        <div className="hatch-no flex-1" />
       </div>
-      <div className="mt-1.5 font-hand text-base text-muted">
-        {fmtToken(market.yesPool)} on YES · {fmtToken(market.noPool)} on NO · pot {fmtToken(o.total)} BnM
+      <div className="num mt-2 text-xs text-muted">
+        {fmtToken(o.total)} BnM pooled · {fmtToken(market.yesPool)} YES · {fmtToken(market.noPool)} NO
       </div>
     </div>
   );

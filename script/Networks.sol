@@ -46,6 +46,10 @@ library Networks {
         );
     }
 
+    /// Chainlink Data Feeds used by Prophet (8 decimals each).
+    address internal constant BTC_USD_BASE_SEPOLIA = 0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298;
+    address internal constant SOL_USD_ARB_SEPOLIA = 0x32377717BC9F9bA8Db45A244bCE77e7c0Cc5A775;
+
     function byChainId(uint256 chainId) internal pure returns (Net memory) {
         if (chainId == 84532) return baseSepolia();
         if (chainId == 421614) return arbitrumSepolia();

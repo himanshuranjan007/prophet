@@ -4,6 +4,9 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { BaseError } from "viem";
 
+/** Wallet "reject" wording across MetaMask, viem and wagmi. */
+const REJECTED = /user rejected|user denied|rejected the request/i;
+
 /** Runs a multi-step tx flow with a readable step label + error; refreshes every on-chain read when done. */
 export function useAction() {
   const qc = useQueryClient();
@@ -11,7 +14,7 @@ export function useAction() {
   const [error, setError] = useState<string | null>(null);
   async function run(fn: (setStep: (s: string) => void) => Promise<void>) {
     setError(null);
-    setStep("starting…");
+    setStep("Starting…");
     try {
       await fn(setStep);
     } catch (e) {
@@ -23,5 +26,13 @@ export function useAction() {
       void qc.invalidateQueries();
     }
   }
-  return { run, step, busy: step !== null, error, clearError: () => setError(null) };
+  return {
+    run,
+    step,
+    busy: step !== null,
+    error,
+    /** The last error was the user declining in their wallet (shown muted, not as a failure). */
+    cancelled: !!error && REJECTED.test(error),
+    clearError: () => setError(null),
+  };
 }

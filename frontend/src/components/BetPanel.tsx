@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { maxUint256, parseEventLogs, parseUnits } from "viem";
+import { useId, useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
+import { formatEther, maxUint256, parseEventLogs, parseUnits } from "viem";
 import { useConfig, useConnection, useReadContract, useSwitchChain } from "wagmi";
 import { readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { HUB_ADDRESS, MIN_BET, NETS, ccipExplorerTx, type Market, type Net } from "@/lib/config";
@@ -10,7 +11,17 @@ import { fmtToken, odds } from "@/lib/format";
 import { usePending } from "@/lib/hooks";
 import { useAction } from "@/lib/useAction";
 import { ChainDot } from "./ChainDot";
-import { Arrow, Circled } from "./Doodles";
+import { IconAlert, IconCheck, IconCoins, IconPlane } from "./Doodles";
+import { ActionError, ExternalLink } from "./ui";
+
+const PRESETS = ["0.1", "0.5", "1"];
+
+/** Native-token fee, at most 6 decimals. */
+function fmtFee(wei: bigint) {
+  const n = Number(formatEther(wei));
+  if (n > 0 && n < 0.000001) return "< 0.000001";
+  return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
+}
 
 export function BetPanel({
   marketId,
@@ -30,6 +41,7 @@ export function BetPanel({
   const { switchChainAsync } = useSwitchChain();
   const pending = usePending();
   const action = useAction();
+  const amountId = useId();
 
   // user's explicit pick wins; otherwise follow the wallet's chain
   const [picked, setNet] = useState<Net | null>(null);
@@ -57,6 +69,17 @@ export function BetPanel({
   const open = market.outcome === 0 && secondsLeft > 0;
   const lateRisk = !net.isHub && secondsLeft < 35 * 60;
 
+  // live CCIP fee preview for spoke bets (display only; placeBet re-quotes)
+  const quote = useReadContract({
+    address: net.entry,
+    abi: spokeAbi,
+    functionName: "quoteBet",
+    args: [marketId, yes, amount],
+    chainId: net.chain.id,
+    account: address,
+    query: { enabled: open && !net.isHub && amount >= MIN_BET, placeholderData: keepPreviousData },
+  });
+
   // parimutuel payout preview after adding this stake
   const yesPool = market.yesPool + (yes ? amount : 0n);
   const noPool = market.noPool + (yes ? 0n : amount);
@@ -70,9 +93,9 @@ export function BetPanel({
   const drip = () =>
     action.run(async (step) => {
       if (!address) throw new Error("Connect a wallet first");
-      step(`switching to ${net.short}…`);
+      step(`Switching to ${net.short}…`);
       await ensureChain(net);
-      step("minting 1 CCIP-BnM…");
+      step("Minting 1 CCIP-BnM…");
       const h = await writeContract(config, { address: net.bnm, abi: bnmAbi, functionName: "drip", args: [address], chainId: net.chain.id });
       await waitForTransactionReceipt(config, { hash: h, chainId: net.chain.id });
     });
@@ -82,25 +105,25 @@ export function BetPanel({
       if (!address) throw new Error("Connect a wallet first");
       if (amount < MIN_BET) throw new Error("Minimum bet is 0.001");
       const cid = net.chain.id;
-      step(`switching to ${net.short}…`);
+      step(`Switching to ${net.short}…`);
       await ensureChain(net);
 
       const allowance = await readContract(config, { address: net.bnm, abi: bnmAbi, functionName: "allowance", args: [address, net.entry], chainId: cid });
       if (allowance < amount) {
-        step("approve CCIP-BnM in your wallet…");
+        step("Approve CCIP-BnM in your wallet…");
         const h = await writeContract(config, { address: net.bnm, abi: bnmAbi, functionName: "approve", args: [net.entry, maxUint256], chainId: cid });
-        step("waiting for approval…");
+        step("Waiting for approval…");
         await waitForTransactionReceipt(config, { hash: h, chainId: cid });
       }
 
       if (net.isHub) {
-        step("confirm your bet…");
+        step("Confirm your bet…");
         const h = await writeContract(config, { address: HUB_ADDRESS, abi: hubAbi, functionName: "bet", args: [marketId, yes, amount], chainId: cid });
-        step("writing it down…");
+        step("Recording your bet…");
         await waitForTransactionReceipt(config, { hash: h, chainId: cid });
         setLastTx({ hash: h, net });
       } else {
-        step("quoting the CCIP fee…");
+        step("Quoting the CCIP fee…");
         const fee = await readContract(config, {
           address: net.entry,
           abi: spokeAbi,
@@ -109,7 +132,7 @@ export function BetPanel({
           chainId: cid,
           account: address,
         });
-        step("confirm your cross-chain bet…");
+        step("Confirm your cross-chain bet…");
         const h = await writeContract(config, {
           address: net.entry,
           abi: spokeAbi,
@@ -118,9 +141,9 @@ export function BetPanel({
           value: (fee * 12n) / 10n, // 20% buffer; the spoke refunds the excess
           chainId: cid,
         });
-        step("sending it across…");
+        step("Sending over CCIP…");
+        // wagmi's waitForTransactionReceipt throws on a reverted receipt
         const r = await waitForTransactionReceipt(config, { hash: h, chainId: cid });
-        if (r.status !== "success") throw new Error("Transaction reverted");
         const sent = parseEventLogs({ abi: spokeAbi, logs: r.logs, eventName: "BetSent" })[0];
         pending.add({
           kind: "bet",
@@ -140,113 +163,175 @@ export function BetPanel({
 
   if (!open) return null;
 
-  return (
-    <div className="card tilt-l relative p-5">
-      <div className="mb-4 font-display text-3xl">Make your call</div>
+  const sideWord = yes ? "YES" : "NO";
+  const sideText = yes ? "text-yes" : "text-no";
+  const nativeSym = net.chain.nativeCurrency.symbol;
 
-      <div className="mb-4">
-        <div className="mb-2 font-hand text-lg text-muted">bet from…</div>
-        <div className="grid grid-cols-3 gap-2.5">
-          {NETS.map((n, i) => {
+  let ctaLabel = `Bet ${amountStr || 0} on ${sideWord} from ${net.short}`;
+  if (!isConnected) ctaLabel = "Connect a wallet to bet";
+  else if (amount === 0n) ctaLabel = "Enter an amount";
+  else if (amount < MIN_BET) ctaLabel = "Minimum bet is 0.001";
+
+  return (
+    <section className="card-primary space-y-4 p-6" aria-labelledby={`${amountId}-title`}>
+      <h2 id={`${amountId}-title`} className="font-display text-head">
+        Place a bet
+      </h2>
+
+      {/* chain: one segmented control */}
+      <div>
+        <div className="eyebrow mb-2">Bet from</div>
+        <div className="sketch-thin grid grid-cols-3 divide-x divide-line overflow-hidden" role="group" aria-label="Chain to bet from">
+          {NETS.map((n) => {
             const on = net.chain.id === n.chain.id;
             return (
               <button
                 key={n.chain.id}
+                type="button"
+                aria-pressed={on}
                 onClick={() => setNet(n)}
-                className={`btn-ghost flex-col gap-0.5 px-1 py-2 ${on ? "bg-hl/50" : ""} ${i === 1 ? "rotate-1" : i === 2 ? "-rotate-1" : ""}`}
+                // keep the focus ring inside the clipped segment (global :focus-visible is unlayered)
+                style={{ outlineOffset: "-4px" }}
+                className={`flex min-w-0 flex-col items-center gap-1.5 px-1 py-2.5 text-center transition-colors duration-(--dur-quick) ${
+                  on ? "bg-hl/50" : "hover:bg-ink/5"
+                }`}
               >
                 <ChainDot net={n} />
-                <span className="text-sm text-muted">{n.isHub ? "instant" : `CCIP ${n.eta}`}</span>
+                <span className="num text-xs text-muted">{n.isHub ? "instant" : `CCIP ${n.eta}`}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-3">
+      {/* side */}
+      <div className="grid grid-cols-2 gap-3" role="group" aria-label="Outcome">
         {[true, false].map((v) => {
           const on = yes === v;
+          const look = on ? (v ? "btn-yes" : "btn-no") : `btn-ghost ${v ? "text-yes" : "text-no"}`;
           return (
-            <button
-              key={String(v)}
-              onClick={() => setYes(v)}
-              className={`btn relative py-3 font-display text-3xl ${
-                on ? (v ? "bg-yes text-on-color" : "bg-no text-on-color") : v ? "bg-card text-yes" : "bg-card text-no"
-              } ${v ? "-rotate-2" : "rotate-2"}`}
-            >
+            <button key={String(v)} type="button" aria-pressed={on} onClick={() => setYes(v)} className={`${look} py-2.5 font-display text-2xl`}>
               {v ? "YES" : "NO"}
-              {on && <Circled className="pointer-events-none absolute -inset-2 h-[calc(100%+1rem)] w-[calc(100%+1rem)] text-ink" />}
             </button>
           );
         })}
       </div>
 
-      <div className="mb-1.5 flex items-center justify-between font-hand text-base text-muted">
-        <span>how much? (CCIP-BnM)</span>
-        <span>
-          you have {balance.data !== undefined ? fmtToken(balance.data) : "–"} ·{" "}
-          <button className="text-accent underline decoration-wavy underline-offset-4" onClick={drip} disabled={action.busy}>
-            grab test tokens
-          </button>
-        </span>
-      </div>
-      <div className="mb-4 flex gap-2">
-        <input
-          value={amountStr}
-          onChange={(e) => setAmountStr(e.target.value.replace(/[^0-9.]/g, ""))}
-          inputMode="decimal"
-          className="field w-full"
-        />
-        {["0.1", "0.5", "1"].map((v, i) => (
-          <button key={v} className={`btn-ghost px-2.5 ${i % 2 ? "rotate-2" : "-rotate-1"}`} onClick={() => setAmountStr(v)}>
-            {v}
-          </button>
-        ))}
+      {/* amount */}
+      <div>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <label htmlFor={amountId} className="eyebrow">
+            Amount
+          </label>
+          {isConnected && (
+            <div className="flex items-center gap-1 text-sm text-muted">
+              <span className="num">Balance {balance.data !== undefined ? fmtToken(balance.data) : "–"}</span>
+              <span aria-hidden>·</span>
+              <button type="button" className="btn-quiet -mr-2" onClick={drip} disabled={action.busy}>
+                <IconCoins className="h-4 w-4" />
+                Get test tokens
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <input
+            id={amountId}
+            value={amountStr}
+            onChange={(e) => setAmountStr(e.target.value.replace(/[^0-9.]/g, ""))}
+            inputMode="decimal"
+            autoComplete="off"
+            className="field num w-full pr-14 text-lg font-semibold"
+          />
+          <span className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-sm font-semibold text-muted">BnM</span>
+        </div>
+        <div className="mt-2 flex gap-2">
+          {PRESETS.map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={amountStr === v}
+              className={`chip num transition-colors duration-(--dur-quick) ${amountStr === v ? "bg-hl/50" : "hover:bg-ink/5"}`}
+              onClick={() => setAmountStr(v)}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="mb-4 font-hand text-lg leading-snug">
-        if <span className={yes ? "text-yes" : "text-no"}>{yes ? "YES" : "NO"}</span> wins you get ≈{" "}
-        <span className="highlight font-display text-2xl">{fmtToken(estPayout)}</span> on {net.short}
-        {!net.isHub && <span className="text-muted"> (flown back over CCIP)</span>}
-        <span className="text-muted">. odds move as people bet.</span>
+      <hr className="rule" />
+
+      {/* what you get */}
+      <div className="space-y-1.5">
+        <p className="leading-snug">
+          If <span className={`font-bold ${sideText}`}>{sideWord}</span> wins you receive ≈{" "}
+          <span className="num text-lg font-bold">{fmtToken(estPayout)} BnM</span> on {net.short}
+          {!net.isHub && <span className="text-muted"> (paid back over CCIP)</span>}
+        </p>
+        <p className="text-xs text-muted">Odds move as others bet.</p>
+        <p className="num text-xs text-muted">
+          {net.isHub ? (
+            "No bridge fee · instant"
+          ) : quote.data !== undefined ? (
+            <>
+              CCIP fee ≈{" "}
+              <span className={`transition-opacity duration-(--dur-quick) ${quote.isPlaceholderData ? "opacity-50" : ""}`}>
+                {fmtFee(quote.data)} {nativeSym}
+              </span>{" "}
+              · excess refunded
+            </>
+          ) : quote.isFetching ? (
+            "Quoting CCIP fee…"
+          ) : (
+            `CCIP fee paid in ${nativeSym} · excess refunded`
+          )}
+        </p>
       </div>
 
       {lateRisk && (
-        <div className="sketch-alt mb-4 border-no p-2.5 font-hand text-base text-no">
-          heads up: CCIP from {net.short} takes {net.eta}. If your bet lands after close it gets refunded automatically.
-        </div>
+        <p className="flex items-start gap-2 text-sm text-no">
+          <IconAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            CCIP from {net.short} takes <span className="num">{net.eta}</span>. If your bet lands after close, it is refunded automatically.
+          </span>
+        </p>
       )}
 
-      {!isConnected ? (
-        <div className="text-center font-hand text-lg text-muted">connect a wallet to bet ↗</div>
-      ) : (
-        <div className="relative">
-          <Arrow className="pointer-events-none absolute -top-12 -left-3 hidden h-12 w-16 -scale-x-100 rotate-[200deg] text-muted sm:block" />
-          <button
-            className={`btn w-full py-3 font-display text-2xl ${yes ? "bg-yes" : "bg-no"} text-on-color`}
-            disabled={action.busy || amount < MIN_BET}
-            onClick={placeBet}
-          >
-            {action.step ?? `${yes ? "YES" : "NO"} · ${amountStr || 0} from ${net.short}`}
-          </button>
-        </div>
-      )}
+      {/* action + feedback */}
+      <div className="space-y-3">
+        <button
+          type="button"
+          className={`${yes ? "btn-yes" : "btn-no"} num w-full py-3 text-base whitespace-normal`}
+          disabled={!isConnected || action.busy || amount < MIN_BET}
+          aria-busy={action.busy}
+          onClick={placeBet}
+        >
+          {action.step ?? ctaLabel}
+        </button>
 
-      {action.error && <div className="mt-2 break-words font-hand text-base text-no">{action.error}</div>}
-      {lastTx && !action.busy && (
-        <div className="mt-3 font-hand text-lg text-muted">
-          {lastTx.net.isHub ? (
-            "✔ written down on the hub"
-          ) : (
-            <>
-              ✈ sent! follow it on the{" "}
-              <a className="text-accent underline" href={ccipExplorerTx(lastTx.hash)} target="_blank" rel="noreferrer">
-                CCIP Explorer
-              </a>
-            </>
-          )}
-        </div>
-      )}
-    </div>
+        <ActionError action={action} />
+
+        {lastTx && !action.busy && (
+          <p role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            {lastTx.net.isHub ? (
+              <>
+                <IconCheck className="h-4 w-4 shrink-0" />
+                Bet recorded on {lastTx.net.short}
+              </>
+            ) : (
+              <>
+                <IconPlane className="h-4 w-4 shrink-0" />
+                <span>Sent over CCIP</span>
+                <span className="text-muted" aria-hidden>
+                  ·
+                </span>
+                <ExternalLink href={ccipExplorerTx(lastTx.hash)}>Track on CCIP Explorer</ExternalLink>
+              </>
+            )}
+          </p>
+        )}
+      </div>
+    </section>
   );
 }

@@ -1,50 +1,53 @@
 import type { Metadata } from "next";
-import { Caveat, Geist_Mono, Nunito, Patrick_Hand } from "next/font/google";
+import { Caveat, Nunito } from "next/font/google";
 import Link from "next/link";
 import { Providers } from "./providers";
 import { ConnectButton } from "@/components/ConnectButton";
-import { CrystalBall, Squiggle } from "@/components/Doodles";
+import { CrystalBall, Rule } from "@/components/Doodles";
 import "./globals.css";
 
-const caveat = Caveat({ variable: "--font-caveat", subsets: ["latin"], weight: ["600", "700"] });
-const patrick = Patrick_Hand({ variable: "--font-patrick", subsets: ["latin"], weight: "400" });
+const caveat = Caveat({ variable: "--font-caveat", subsets: ["latin"], weight: ["700"] });
 const body = Nunito({ variable: "--font-body", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000");
 
+const description =
+  "Prediction markets you can bet on from any chain. One shared pool on Base, moved by Chainlink CCIP, settled by Chainlink Data Feeds.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "Prophet · call it from any chain",
-  description:
-    "Hand-drawn prediction markets. Bet YES or NO on prices from Base, Arbitrum or Ethereum: one shared pool, moved by Chainlink CCIP, settled by Chainlink Data Feeds.",
+  title: { default: "Prophet · call it from any chain", template: "%s · Prophet" },
+  description,
+  openGraph: { title: "Prophet · call it from any chain", description, siteName: "Prophet" },
+  twitter: { card: "summary_large_image", title: "Prophet · call it from any chain", description },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${caveat.variable} ${patrick.variable} ${body.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" className={`${caveat.variable} ${body.variable} h-full`}>
       <body className="flex min-h-full flex-col">
         <Providers>
-          <header className="relative">
-            <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 pt-5 pb-3">
-              <Link href="/" className="group flex items-center gap-2">
-                <CrystalBall className="h-10 w-10 text-accent transition-transform group-hover:-rotate-12" />
-                <span className="font-display text-4xl leading-none">Prophet</span>
-                <span className="chip ml-1 hidden -rotate-3 text-muted sm:inline-flex">testnet · CCIP 2.0</span>
+          <header className="sticky top-0 z-20 bg-background/85 backdrop-blur-sm">
+            <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+              <Link href="/" className="flex items-center gap-2" aria-label="Prophet home">
+                <CrystalBall className="h-8 w-8" />
+                <span className="font-display text-3xl leading-none">Prophet</span>
+                <span className="ml-2 hidden items-center gap-1.5 text-xs font-semibold text-muted sm:inline-flex">
+                  <span className="status-dot" /> testnet · CCIP 2.0
+                </span>
               </Link>
               <ConnectButton />
             </div>
-            <Squiggle className="mx-auto block h-3 w-[min(92%,62rem)] text-ink/25" />
+            <Rule className="block h-1.5 w-full text-line" />
           </header>
-          <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">{children}</main>
-          <footer className="px-4 pt-6 pb-8 text-center font-hand text-base text-muted">
-            positions live on Base Sepolia · bets from Arbitrum &amp; Ethereum Sepolia travel by Chainlink CCIP · settled by the
-            Chainlink ETH/USD feed
+          <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10">{children}</main>
+          <footer className="mx-auto w-full max-w-5xl px-4 pb-8">
+            <Rule className="mb-4 block h-1.5 w-full text-line" />
+            <p className="text-center text-xs text-muted">
+              Pool on Base Sepolia · bets travel from Arbitrum &amp; Ethereum Sepolia via Chainlink CCIP · settled by Chainlink Data Feeds
+            </p>
           </footer>
         </Providers>
       </body>

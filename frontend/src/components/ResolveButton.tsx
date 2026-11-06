@@ -6,6 +6,7 @@ import { HUB_ADDRESS, HUB_CHAIN, Outcome, type Market } from "@/lib/config";
 import { hubAbi } from "@/lib/abi";
 import { useAction } from "@/lib/useAction";
 import { CrystalBall } from "./Doodles";
+import { ActionError } from "./ui";
 
 /** Anyone can settle a closed market against the first Data Feed round after close. */
 export function ResolveButton({ marketId, market, now, onDone }: { marketId: bigint; market: Market; now: number; onDone?: () => void }) {
@@ -31,34 +32,49 @@ export function ResolveButton({ marketId, market, now, onDone }: { marketId: big
 
   const resolve = () =>
     action.run(async (step) => {
-      step("switching to Base…");
+      step("Switching to Base…");
       if (chainId !== HUB_CHAIN.id) await switchChainAsync({ chainId: HUB_CHAIN.id });
-      step("confirm in your wallet…");
+      step("Confirm in your wallet…");
       const h = await writeContract(config, { address: HUB_ADDRESS, abi: hubAbi, functionName: "resolve", args: [marketId, roundId], chainId: HUB_CHAIN.id });
-      step("reading the ball…");
+      step("Settling on Base…");
       await waitForTransactionReceipt(config, { hash: h, chainId: HUB_CHAIN.id });
       onDone?.();
     });
 
   return (
-    <div className="card -rotate-[0.6deg] flex flex-wrap items-center justify-between gap-4 bg-hl/25 p-5">
-      <div className="flex items-center gap-3">
-        <CrystalBall className="wiggle h-12 w-12 shrink-0 text-accent" />
-        <div>
-          <div className="font-display text-3xl">Time&apos;s up!</div>
-          <div className="font-hand text-lg text-muted">
-            {oneSided
-              ? "only one side showed up, so it settles void and everyone gets refunded."
-              : ready
-                ? `settles on Chainlink round ${(roundId & ((1n << 64n) - 1n)).toString()}, the first price after close.`
-                : "waiting for Chainlink to publish its first price after close…"}
-          </div>
+    <section className="card-primary space-y-4 p-6">
+      <div className="flex items-start gap-4">
+        <CrystalBall className={`h-10 w-10 shrink-0 ${action.busy ? "wiggle" : ""}`} />
+        <div className="min-w-0">
+          <h2 className="font-display text-head">Time&apos;s up</h2>
+          <p className="mt-1 text-sm text-muted">
+            {oneSided ? (
+              "Only one side has bets, so the market settles as void and everyone is refunded."
+            ) : ready ? (
+              <>
+                Settles on Chainlink round <span className="num">{(roundId & ((1n << 64n) - 1n)).toString()}</span>, the first price after
+                close.
+              </>
+            ) : (
+              <>
+                Waiting for Chainlink to publish its first price after close. This usually takes up to{" "}
+                <span className="num">20 minutes</span>.
+              </>
+            )}
+          </p>
         </div>
       </div>
-      <button className="btn-primary rotate-1 text-xl" disabled={!ready || !isConnected || action.busy} onClick={resolve}>
-        {action.step ?? (isConnected ? "Reveal the answer" : "connect to resolve")}
-      </button>
-      {action.error && <div className="w-full break-words font-hand text-base text-no">{action.error}</div>}
-    </div>
+
+      <div className="space-y-2">
+        <button type="button" className="btn-primary w-full py-3 text-base whitespace-normal" disabled={!ready || !isConnected || action.busy} aria-busy={action.busy} onClick={resolve}>
+          {action.step ?? (isConnected ? "Resolve market" : "Connect a wallet to resolve")}
+        </button>
+        <p className="text-center text-xs text-muted">
+          Anyone can resolve · <span className="num">1</span> transaction on Base
+        </p>
+      </div>
+
+      <ActionError action={action} />
+    </section>
   );
 }

@@ -1,36 +1,46 @@
 @import "tailwindcss";
 
-/* ------------------------------------------------------------------ tokens
-   Light = notebook paper + ink. Dark = chalkboard + chalk. */
+/* =====================================================================
+   Prophet · "ink on paper"
+   Light = notebook paper + ink. Dark = chalkboard + chalk.
+   Rules: ink is the only accent; yes/no colour only outcomes, the pool bar
+   and the bet CTA; highlighter only on the current selection + hero phrase;
+   nothing is rotated except the resolve stamp.
+   ===================================================================== */
 :root {
-  --paper: #fbf5e6;
-  --paper-dot: #e6dcc3;
-  --card: #fffdf6;
-  --ink: #23201b;
-  --line: #23201b26;
-  --muted: #736b5c;
-  --accent: #2b59c3; /* blue ballpoint */
-  --yes: #2f9e44; /* green marker */
-  --no: #e03131; /* red marker */
-  --hl: #ffd43b; /* yellow highlighter */
-  --pink: #f06595;
-  --on-color: #fffdf6;
+  --paper: #fbf6ea;
+  --paper-dot: #e8dfc8;
+  --card: #fffdf7;
+  --ink: #221f1a;
+  --line: #221f1a26;
+  --muted: #6e675a;
+  --yes: #16652b; /* validated: CVD ΔE 11.4 vs --no on --card (dataviz validator) */
+  --no: #ec6432;
+  --hl: #ffd43b;
+  --on-ink: #fffdf7;
+
+  --shadow-sm: 2px 2px 0 var(--ink);
+  --shadow-md: 3px 3px 0 var(--ink);
+
+  --dur-quick: 150ms;
+  --dur-base: 300ms;
+  --dur-slow: 600ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-ink: cubic-bezier(0.34, 1.3, 0.64, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #1e2421;
-    --paper-dot: #2c3430;
-    --card: #252c28;
-    --ink: #eeebe0;
-    --line: #eeebe02e;
-    --muted: #a9b0a6;
-    --accent: #7cb7ff;
-    --yes: #7fd88f;
-    --no: #ff8a8a;
-    --hl: #e3c34a;
-    --pink: #f7a1c0;
-    --on-color: #1e2421;
+    --paper: #1d2320;
+    --paper-dot: #283029;
+    --card: #232a26;
+    --ink: #ece9df;
+    --line: #ece9df26;
+    --muted: #a3aa9f;
+    --yes: #43a85d; /* validated: CVD ΔE 6.4 (legal: YES/NO always labelled + opposite hatch) */
+    --no: #d0453a;
+    --hl: #e0c049;
+    --on-ink: #1d2320;
   }
 }
 
@@ -41,16 +51,22 @@
   --color-ink: var(--ink);
   --color-line: var(--line);
   --color-muted: var(--muted);
-  --color-accent: var(--accent);
   --color-yes: var(--yes);
   --color-no: var(--no);
   --color-hl: var(--hl);
-  --color-pink: var(--pink);
-  --color-on-color: var(--on-color);
-  --font-sans: var(--font-body), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --color-on-ink: var(--on-ink);
+
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-caveat), cursive;
-  --font-hand: var(--font-patrick), var(--font-body), cursive;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* 5-step scale: hero / title / head (Caveat) + base / sm (Nunito) */
+  --text-hero: clamp(3.25rem, 8vw, 4.5rem);
+  --text-hero--line-height: 0.95;
+  --text-title: clamp(2.25rem, 5.5vw, 3.25rem);
+  --text-title--line-height: 1.02;
+  --text-head: 1.75rem;
+  --text-head--line-height: 1.1;
 }
 
 /* ------------------------------------------------------------------ base */
@@ -60,49 +76,136 @@ html {
 
 body {
   background-color: var(--paper);
-  /* notebook dot grid */
-  background-image: radial-gradient(var(--paper-dot) 1.2px, transparent 1.3px);
-  background-size: 22px 22px;
+  background-image: radial-gradient(var(--paper-dot) 1.1px, transparent 1.2px);
+  background-size: 24px 24px;
   color: var(--ink);
-  font-family: var(--font-body), system-ui, sans-serif;
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "tnum" 0;
+  -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
   background: var(--hl);
-  color: #23201b;
+  color: #221f1a;
 }
 
-/* ------------------------------------------------------------------ sketch kit */
-
-/* Wobbly hand-drawn outline: asymmetric radii read as a pen line, not a CSS box. */
-@utility sketch {
-  border: 2px solid var(--ink);
-  border-radius: 255px 18px 225px 16px / 16px 225px 18px 255px;
-}
-@utility sketch-alt {
-  border: 2px solid var(--ink);
-  border-radius: 18px 225px 16px 255px / 255px 16px 225px 18px;
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
 }
 
-@utility card {
-  @apply sketch bg-card;
-  box-shadow: 4px 5px 0 var(--ink);
-}
-
-@utility tilt-l {
-  transform: rotate(-0.8deg);
-}
-@utility tilt-r {
-  transform: rotate(0.7deg);
-}
-
+/* ------------------------------------------------------------------ type */
 @utility font-display {
   font-family: var(--font-caveat), cursive;
   font-weight: 700;
   letter-spacing: 0;
 }
-@utility font-hand {
-  font-family: var(--font-patrick), var(--font-body), cursive;
+@utility num {
+  font-variant-numeric: tabular-nums;
+}
+/* small uppercase label above a value / control */
+@utility eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+@utility link {
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  &:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+/* ------------------------------------------------------------------ sketch kit
+   Asymmetric radii read as a pen line, not a CSS box. */
+@utility sketch {
+  border: 2px solid var(--ink);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+}
+@utility sketch-thin {
+  border: 1.5px solid var(--ink);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+}
+
+/* secondary surface: thin pen outline, no shadow */
+@utility card {
+  @apply sketch-thin bg-card;
+}
+/* the one primary surface per view (bet panel / resolve) */
+@utility card-primary {
+  @apply sketch bg-card;
+  box-shadow: var(--shadow-md);
+}
+
+/* dashed hand-ruled divider */
+@utility rule {
+  border-top: 1.5px dashed var(--line);
+}
+
+@utility btn {
+  @apply sketch-thin inline-flex items-center justify-center gap-2 px-4 py-2 text-[0.95rem] font-semibold leading-tight whitespace-nowrap;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--dur-quick) var(--ease-out),
+    box-shadow var(--dur-quick) var(--ease-out),
+    background-color var(--dur-quick) var(--ease-out);
+  &:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  &:active:not(:disabled) {
+    transform: translate(1px, 1px);
+    box-shadow: 0 0 0 var(--ink);
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+}
+@utility btn-primary {
+  @apply btn bg-ink text-on-ink;
+}
+@utility btn-ghost {
+  @apply btn bg-card text-ink;
+}
+@utility btn-yes {
+  @apply btn bg-yes text-on-ink;
+}
+@utility btn-no {
+  @apply btn bg-no text-on-ink;
+}
+/* quiet button: no outline/shadow until hover */
+@utility btn-quiet {
+  @apply inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold text-muted;
+  transition: color var(--dur-quick) var(--ease-out);
+  &:hover:not(:disabled) {
+    color: var(--ink);
+  }
+}
+
+@utility field {
+  @apply sketch-thin bg-card px-3 py-2.5 text-base outline-none;
+  font-variant-numeric: tabular-nums;
+  &:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hl) 75%, transparent);
+  }
+}
+
+@utility chip {
+  @apply sketch-thin inline-flex items-center gap-1.5 bg-card px-2.5 py-1 text-sm font-semibold;
+}
+
+/* status: 6px ink dot + text */
+@utility status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--ink);
 }
 
 /* marker swipe behind text */
@@ -118,6 +221,8 @@ body {
   background-position: 0 82%;
   background-repeat: no-repeat;
   padding: 0 0.15em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 /* hatched marker fill */
@@ -128,46 +233,23 @@ body {
   background: repeating-linear-gradient(45deg, var(--no) 0 5px, color-mix(in srgb, var(--no) 55%, transparent) 5px 8px);
 }
 
-@utility btn {
-  @apply sketch inline-flex items-center justify-center gap-2 px-3.5 py-2 text-[1.05rem] leading-tight transition-transform duration-100;
-  font-family: var(--font-patrick), var(--font-body), cursive;
-  box-shadow: 2px 3px 0 var(--ink);
-  &:hover:not(:disabled) {
-    transform: translate(-1px, -1px) rotate(-0.6deg);
-    box-shadow: 3px 4px 0 var(--ink);
-  }
-  &:active:not(:disabled) {
-    transform: translate(2px, 2px);
-    box-shadow: 0 0 0 var(--ink);
-  }
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
+/* loading placeholder drawn in pencil */
+@utility skeleton {
+  border: 1.5px dashed var(--line);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  animation: pencil 1.6s ease-in-out infinite;
 }
-@utility btn-primary {
-  @apply btn bg-accent text-on-color;
-}
-@utility btn-ghost {
-  @apply btn bg-card text-ink;
-}
-
-@utility field {
-  @apply sketch-alt bg-card px-3 py-2 outline-none;
-  font-family: var(--font-patrick), var(--font-body), cursive;
-  font-size: 1.1rem;
-  &:focus {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hl) 80%, transparent);
+@keyframes pencil {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
-@utility chip {
-  @apply sketch-alt inline-flex items-center gap-1 px-2 py-0.5 text-sm;
-  font-family: var(--font-patrick), var(--font-body), cursive;
-  border-width: 1.5px;
-}
-
-/* pen-stroke draw-in for doodles */
+/* ------------------------------------------------------------------ motion */
 @keyframes draw {
   from {
     stroke-dashoffset: var(--len, 400);
@@ -179,19 +261,20 @@ body {
 @utility draw-in {
   stroke-dasharray: var(--len, 400);
   stroke-dashoffset: var(--len, 400);
-  animation: draw 0.9s ease-out 0.15s forwards;
+  animation: draw 0.9s var(--ease-out) 0.15s forwards;
 }
 @keyframes wiggle {
   0%,
   100% {
-    transform: rotate(-3deg);
+    transform: rotate(-4deg);
   }
   50% {
-    transform: rotate(3deg);
+    transform: rotate(4deg);
   }
 }
+/* only while something is actually busy / in flight */
 @utility wiggle {
-  animation: wiggle 2.6s ease-in-out infinite;
+  animation: wiggle 1.2s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -199,7 +282,15 @@ body {
     animation: none;
     stroke-dashoffset: 0;
   }
-  .wiggle {
+  .wiggle,
+  .skeleton {
     animation: none;
+  }
+  .btn,
+  .btn-primary,
+  .btn-ghost,
+  .btn-yes,
+  .btn-no {
+    transition: none;
   }
 }
