@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { encode } from "uqr";
-import { useConnect, useConnection, useConnectors, useDisconnect, type Connector } from "wagmi";
+import { useConnect, useConnectors, type Connector } from "wagmi";
 import { baseAccountConnector } from "@/lib/wagmi";
 import { walletModal, useWalletModal } from "@/lib/walletModal";
 import { CrystalBall, IconBack, IconCheck, IconChevron, IconClose, IconCopy, IconExternal, IconQr, IconWallet } from "../Doodles";
@@ -59,8 +59,6 @@ const prefetchBase = () => void import("@base-org/account").catch(() => {});
 function ConnectBody({ notice }: { notice?: string }) {
   const connectors = useConnectors();
   const { connectAsync } = useConnect();
-  const { disconnectAsync } = useDisconnect();
-  const { isConnected } = useConnection();
   const [busy, setBusy] = useState<string | null>(null); // connector id being connected
   const [error, setError] = useState<Err | null>(notice ? { msg: notice, cancelled: false } : null);
   const [qr, setQr] = useState<string | null>(null);
@@ -74,11 +72,6 @@ function ConnectBody({ notice }: { notice?: string }) {
     offRef.current = undefined;
   };
   useEffect(() => abandon, []);
-
-  // connected by any route (e.g. a phone scanned the QR): we're done
-  useEffect(() => {
-    if (isConnected && busy) walletModal.close();
-  }, [isConnected, busy]);
 
   // EIP-6963 wallets carry their own name + icon; the generic one is only useful when none announced
   const announced = connectors.filter((c) => c.type === "injected" && c.id !== "injected");
@@ -101,9 +94,11 @@ function ConnectBody({ notice }: { notice?: string }) {
     }
     try {
       await connectAsync({ connector: c });
-      // a stale attempt that still went through (e.g. QR scanned after pressing Back): don't keep it
-      if (id !== attempt.current) await disconnectAsync({ connector: c }).catch(() => {});
-      else walletModal.close();
+      // Connected. Keep it even if this attempt went stale (dialog closed, Back pressed): the user approved
+      // it in their wallet. Never disconnect here: wagmi marks the wallet connected a few microtasks before
+      // connectAsync resolves, so anything that closes the dialog on "connected" makes every attempt look
+      // stale, and a disconnect would revoke the permission the wallet just granted.
+      walletModal.close();
     } catch (e) {
       if (id !== attempt.current) return;
       setError({ msg: errMsg(e), cancelled: isRejection(e) });

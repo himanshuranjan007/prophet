@@ -4,10 +4,12 @@ import { useSyncExternalStore } from "react";
 import { usePublicClient, useReadContract, useReadContracts } from "wagmi";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { parseAbiItem, type Address } from "viem";
-import { HUB_ADDRESS, HUB_CHAIN, HUB_DEPLOY_BLOCK, assetBySymbol, type AppChain, type Asset, type Market } from "./config";
+import { HUB_ADDRESS, HUB_CHAIN, NETS, assetBySymbol, type AppChain, type Asset, type Market } from "./config";
+import { scanLogs } from "./logs";
 import { feedAbi, feedRelayerAbi, hubAbi, relayedFeedAbi } from "./abi";
 
 const hub = { address: HUB_ADDRESS, abi: hubAbi, chainId: HUB_CHAIN.id } as const;
+const HUB_NET = NETS.find((n) => n.isHub)!;
 
 // one shared 1s clock; server snapshot is 0 so prerender never reads the current time
 let nowSec = 0;
@@ -263,32 +265,25 @@ const betPlaced = parseAbiItem(
   "event BetPlaced(uint256 indexed marketId, address indexed user, uint64 indexed chainSelector, bool yes, uint256 amount, bytes32 ccipMessageId)",
 );
 
-/** All BetPlaced events for a market, newest first. Paged to stay under public-RPC log range limits. */
+/** All BetPlaced events for a market, newest first. Incremental: after the first load, each poll only
+ *  reads the blocks since the last one (on the full-range log RPC, see logs.ts). */
 export function useBetLogs(marketId: bigint) {
-  const client = usePublicClient({ chainId: HUB_CHAIN.id });
   return useQuery({
     queryKey: ["bets", marketId.toString()],
-    enabled: !!client,
     refetchInterval: 15_000,
     queryFn: async (): Promise<BetLog[]> => {
-      const latest = await client!.getBlockNumber();
-      const out: BetLog[] = [];
-      const STEP = 9_999n;
-      for (let from = HUB_DEPLOY_BLOCK; from <= latest; from += STEP + 1n) {
-        const to = from + STEP > latest ? latest : from + STEP;
-        const logs = await client!.getLogs({ address: HUB_ADDRESS, event: betPlaced, args: { marketId }, fromBlock: from, toBlock: to });
-        for (const l of logs)
-          out.push({
-            user: l.args.user!,
-            chainSelector: l.args.chainSelector!,
-            yes: l.args.yes!,
-            amount: l.args.amount!,
-            ccipMessageId: l.args.ccipMessageId!,
-            txHash: l.transactionHash,
-            blockNumber: l.blockNumber,
-          });
-      }
-      return out.reverse();
+      const logs = await scanLogs(HUB_NET, betPlaced, { marketId });
+      return logs
+        .map(({ args, transactionHash, blockNumber }) => ({
+          user: args.user as Address,
+          chainSelector: args.chainSelector as bigint,
+          yes: args.yes as boolean,
+          amount: args.amount as bigint,
+          ccipMessageId: args.ccipMessageId as `0x${string}`,
+          txHash: transactionHash,
+          blockNumber,
+        }))
+        .reverse();
     },
   });
 }

@@ -3,10 +3,11 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useReadContracts } from "wagmi";
-import { createPublicClient, http, parseAbiItem, type AbiEvent, type Address, type Hex, type PublicClient } from "viem";
+import { parseAbiItem, type AbiEvent, type Address, type Hex } from "viem";
 import { HUB_ADDRESS, HUB_CHAIN, NETS, Outcome, assetByFeed, netBySelector, type Asset, type Market, type Net } from "./config";
 import { hubAbi } from "./abi";
 import { useMarkets } from "./hooks";
+import { logClient, scanLogs, type RawLog } from "./logs";
 
 /* A wallet's whole Prophet footprint, independent of the wallet's current chain (or of any wallet):
    positions + claimable are read from the hub on Base; history and CCIP trips come from event logs on
@@ -101,7 +102,6 @@ export type Portfolio = {
 // ---------------------------------------------------------------- log scanning
 
 const ZERO_ID = `0x${"0".repeat(64)}` as Hex;
-const SPAN = 45_000n; // < publicnode's 50k block cap
 /** Payout / refund legs younger than this are shown as "in the air" (no OffRamp lookup needed). */
 const PAYOUT_WINDOW = 45 * 60;
 /** Safety net only: a spoke claim still unprocessed after this long is treated as stuck, not in flight. */
@@ -124,37 +124,10 @@ const ev = {
   claimIgnored: parseAbiItem("event ClaimIgnored(uint256 indexed marketId, address indexed user, uint64 indexed chainSelector)"),
 };
 
-/** Dedicated log clients (full-range RPCs), separate from wagmi's read transports. */
-const logClients = new Map<number, PublicClient>();
-const logClient = (net: Net) => {
-  let c = logClients.get(net.chain.id);
-  if (!c) {
-    c = createPublicClient({ chain: net.chain, transport: http(net.logsRpc) }) as PublicClient;
-    logClients.set(net.chain.id, c);
-  }
-  return c;
-};
-
-type RawLog = { args: Record<string, unknown>; transactionHash: Hex; blockNumber: bigint };
-/** Incremental cursor per (chain, contract, event, user): each poll scans only new blocks. */
-const scans = new Map<string, { to: bigint; logs: RawLog[] }>();
 /** Block timestamps per chain (immutable, cached forever). */
 const blockTimes = new Map<string, number>();
 
-async function scan(net: Net, event: AbiEvent, user: Address): Promise<RawLog[]> {
-  const client = logClient(net);
-  const key = `${net.chain.id}:${event.name}:${user.toLowerCase()}`;
-  const prev = scans.get(key) ?? { to: net.deployBlock - 1n, logs: [] };
-  const head = (await client.getBlockNumber()) - 1n; // one behind: some RPCs reject the very head
-  const logs = [...prev.logs];
-  for (let from = prev.to + 1n; from <= head; from += SPAN) {
-    const to = from + SPAN - 1n > head ? head : from + SPAN - 1n;
-    const got = await client.getLogs({ address: net.entry, event, args: { user }, fromBlock: from, toBlock: to });
-    for (const l of got) logs.push({ args: l.args as Record<string, unknown>, transactionHash: l.transactionHash!, blockNumber: l.blockNumber! });
-  }
-  scans.set(key, { to: head > prev.to ? head : prev.to, logs });
-  return logs;
-}
+const scan = (net: Net, event: AbiEvent, user: Address) => scanLogs(net, event, { user });
 
 async function stamp(net: Net, blocks: bigint[]) {
   const client = logClient(net);
