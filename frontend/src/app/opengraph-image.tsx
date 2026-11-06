@@ -23,10 +23,12 @@ const CHAINS = [
 
 const font = (pkg: string, file: string) => readFile(join(process.cwd(), "node_modules/@fontsource", pkg, "files", file));
 
-const [caveat, nunito, nunitoBlack] = await Promise.all([
+const [caveat, serif, serifItalic, inter, interBold] = await Promise.all([
   font("caveat", "caveat-latin-700-normal.woff"),
-  font("nunito", "nunito-latin-400-normal.woff"),
-  font("nunito", "nunito-latin-800-normal.woff"),
+  font("instrument-serif", "instrument-serif-latin-400-normal.woff"),
+  font("instrument-serif", "instrument-serif-latin-400-italic.woff"),
+  font("inter", "inter-latin-400-normal.woff"),
+  font("inter", "inter-latin-700-normal.woff"),
 ]);
 
 const marker = `linear-gradient(transparent 52%, ${HL}d9 52%, ${HL}b3 88%, transparent 88%)`;
@@ -54,7 +56,7 @@ export default function Image() {
           backgroundSize: "34px 34px",
           color: INK,
           padding: "52px 64px 56px",
-          fontFamily: "Nunito",
+          fontFamily: "Inter",
         }}
       >
         {/* brand */}
@@ -71,10 +73,10 @@ export default function Image() {
 
         {/* headline + subtitle */}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", flexDirection: "column", fontFamily: "Caveat", fontSize: 136, lineHeight: 0.98 }}>
+          <div style={{ display: "flex", flexDirection: "column", fontFamily: "Instrument Serif", fontSize: 136, lineHeight: 1, letterSpacing: -1.5 }}>
             <span>Call it.</span>
             <div style={{ display: "flex" }}>
-              <span style={{ backgroundImage: marker, padding: "0 16px 0 6px", marginLeft: -6 }}>from any chain.</span>
+              <span style={{ backgroundImage: marker, padding: "0 16px 0 6px", marginLeft: -6, fontStyle: "italic" }}>from any chain.</span>
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", marginTop: 30, fontSize: 30, lineHeight: 1.4, color: MUTED }}>
@@ -83,7 +85,7 @@ export default function Image() {
                 {line.map((word, j) => (
                   <div key={j} style={{ display: "flex" }}>
                     {word.map((r, k) => (
-                      <span key={k} style={{ color: r.c, fontWeight: r.b ? 800 : 400 }}>
+                      <span key={k} style={{ color: r.c, fontWeight: r.b ? 700 : 400 }}>
                         {r.t}
                       </span>
                     ))}
@@ -95,7 +97,7 @@ export default function Image() {
         </div>
 
         {/* chains */}
-        <div style={{ display: "flex", alignItems: "center", gap: 36, fontSize: 30, fontWeight: 800 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 36, fontSize: 30, fontWeight: 700 }}>
           {CHAINS.map((c) => (
             <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <svg width="30" height="30" viewBox="0 0 14 14">
@@ -116,8 +118,10 @@ export default function Image() {
       ...size,
       fonts: [
         { name: "Caveat", data: caveat, style: "normal", weight: 700 },
-        { name: "Nunito", data: nunito, style: "normal", weight: 400 },
-        { name: "Nunito", data: nunitoBlack, style: "normal", weight: 800 },
+        { name: "Instrument Serif", data: serif, style: "normal", weight: 400 },
+        { name: "Instrument Serif", data: serifItalic, style: "italic", weight: 400 },
+        { name: "Inter", data: inter, style: "normal", weight: 400 },
+        { name: "Inter", data: interBold, style: "normal", weight: 700 },
       ],
     },
   );

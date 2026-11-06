@@ -1,29 +1,34 @@
 # Prophet design system: "ink on paper"
 
 Hand-drawn identity, professional restraint. The art stays: crystal-ball logo,
-wobbly pen outlines, highlighter, hatched YES/NO bar, Caveat headlines, pen-drawn
-icons. The noise goes: no tilts, no emoji, one accent, one body font.
+wobbly pen outlines, highlighter, hatched YES/NO bar, pen-drawn icons; type is
+editorial (Instrument Serif + Inter) with a handwritten wordmark. The noise goes: no tilts, no emoji, one accent, one body font.
 
 Source of truth for tokens and utilities: `src/app/globals.css`.
 Art and icons: `src/components/Doodles.tsx`.
 Shared UI pieces: `src/components/ui.tsx` (`StatusLabel`, `ExternalLink`, `ActionError`). Use them instead of re-styling by hand.
 
-## Typography (2 families)
+## Typography (editorial pairing)
+
+Instrument Serif for words that headline, Inter for everything you read or operate, Caveat only for the wordmark.
 
 | Role | Class | Use for |
 |---|---|---|
-| Hero | `font-display text-hero` | home hero only |
+| Wordmark | `font-script text-3xl` | the "Prophet" logo only (the one handwritten touch) |
+| Hero | `font-display text-hero` | home hero; the highlighted phrase is `italic` |
 | Title | `font-display text-title` | market question (h1), big page titles |
 | Head | `font-display text-head` | section titles ("Live markets") and card titles ("Place a bet") |
 | Card question | `font-display text-[1.6rem] leading-tight` | market question inside a list card |
-| Body | (default, Nunito) | everything else |
+| Body / UI | (default, Inter) | paragraphs, labels, buttons, controls (incl. the YES/NO toggles: `font-bold tracking-wide`) |
 | Label | `eyebrow` | small uppercase label above a value or control |
-| Numbers | `num` | every price, amount, %, multiplier, countdown (tabular, no jitter) |
-| Addresses / hashes | `font-mono text-[0.8rem]` | only these |
+| Numbers | `num` | every price, amount, %, multiplier, countdown (Inter tabular figures, no jitter) |
+| Addresses / hashes | `font-mono text-[0.8rem]` | Geist Mono, only these |
 
-- Caveat is for **words**, never for numbers. A large number (price, payout) is `num text-2xl font-bold` or bigger in Nunito.
+- The serif is for **words**, never for numbers. A large number (price, payout) is `num text-2xl font-bold` or bigger in Inter.
+- Use the serif `italic` sparingly, for emphasis (the hero phrase), never for whole paragraphs.
 - `font-hand`, `sketch-alt` and the `accent` colour aliases have been removed. Don't reintroduce them.
-- Weights: 400 body, 600 controls and emphasis, 700/800 key numbers.
+- Weights: Inter 400 body, 600 controls and emphasis, 700/800 key numbers. Instrument Serif has a single 400 weight: size, not boldness, carries hierarchy.
+- Share images (`opengraph-image.tsx`) use the same three faces via `@fontsource` WOFF files.
 
 ## Colour
 

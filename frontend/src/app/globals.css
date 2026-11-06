@@ -56,17 +56,17 @@
   --color-hl: var(--hl);
   --color-on-ink: var(--on-ink);
 
-  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-caveat), cursive;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument), ui-serif, Georgia, serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* 5-step scale: hero / title / head (Caveat) + base / sm (Nunito) */
-  --text-hero: clamp(3.25rem, 8vw, 4.5rem);
-  --text-hero--line-height: 0.95;
-  --text-title: clamp(2.25rem, 5.5vw, 3.25rem);
-  --text-title--line-height: 1.02;
+  /* 5-step scale: hero / title / head (Instrument Serif) + base / sm (Inter) */
+  --text-hero: clamp(3.25rem, 8vw, 4.75rem);
+  --text-hero--line-height: 0.98;
+  --text-title: clamp(2.25rem, 5vw, 3.25rem);
+  --text-title--line-height: 1.06;
   --text-head: 1.75rem;
-  --text-head--line-height: 1.1;
+  --text-head--line-height: 1.15;
 }
 
 /* ------------------------------------------------------------------ base */
@@ -79,7 +79,8 @@ body {
   background-image: radial-gradient(var(--paper-dot) 1.1px, transparent 1.2px);
   background-size: 24px 24px;
   color: var(--ink);
-  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.006em; /* Inter reads tighter and crisper at text sizes */
   font-feature-settings: "tnum" 0;
   -webkit-font-smoothing: antialiased;
 }
@@ -95,7 +96,14 @@ body {
 }
 
 /* ------------------------------------------------------------------ type */
+/* editorial serif for words: headlines, card titles, market questions */
 @utility font-display {
+  font-family: var(--font-instrument), ui-serif, Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+/* the one handwritten touch: the Prophet wordmark */
+@utility font-script {
   font-family: var(--font-caveat), cursive;
   font-weight: 700;
   letter-spacing: 0;

@@ -2,21 +2,26 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { encode } from "uqr";
-import { useConnect, useConnection, useConnectors, type Connector } from "wagmi";
+import { useConnect, useConnection, useConnectors, useDisconnect, type Connector } from "wagmi";
+import { baseAccountConnector } from "@/lib/wagmi";
 import { walletModal, useWalletModal } from "@/lib/walletModal";
 import { CrystalBall, IconBack, IconCheck, IconChevron, IconClose, IconCopy, IconExternal, IconQr, IconWallet } from "../Doodles";
 
 /** One app-wide "connect a wallet" dialog. Opened from anywhere via walletModal.open(). */
 export function ConnectModal() {
-  const { open, nonce } = useWalletModal();
+  const { open, nonce, notice } = useWalletModal();
   const ref = useRef<HTMLDialogElement>(null);
 
   // sync the store with the native <dialog> (focus trap, Escape, top layer for free)
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) d.showModal();
-    else if (!open && d.open) d.close();
+    if (open && !d.open) {
+      d.showModal();
+      // React's autoFocus runs before showModal (and the card is a scroll container the browser would
+      // otherwise pick), so focus the intended first option explicitly once the dialog is open.
+      d.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+    } else if (!open && d.open) d.close();
   }, [open]);
 
   return (
@@ -28,7 +33,7 @@ export function ConnectModal() {
       onClick={(e) => e.target === ref.current && walletModal.close()}
       className="wallet-dialog m-auto w-[min(27rem,calc(100vw-2rem))] overflow-visible bg-transparent p-0 text-ink backdrop:bg-ink/25 backdrop:backdrop-blur-[1px]"
     >
-      {open && <ConnectBody key={nonce} />}
+      {open && <ConnectBody key={nonce} notice={notice} />}
     </dialog>
   );
 }
@@ -43,14 +48,32 @@ const isRejection = (e: unknown) => {
     /reject|denied|cancel|closed/i.test(`${err?.shortMessage ?? ""} ${err?.message ?? ""}`)
   );
 };
+const errMsg = (e: unknown) => {
+  const err = e as { shortMessage?: string; message?: string };
+  return (err.shortMessage ?? err.message ?? "Couldn't connect").split("\n")[0];
+};
 
-function ConnectBody() {
+/** Warm the Base Account SDK chunk (hover/focus) so its popup opens within the click's user activation. */
+const prefetchBase = () => void import("@base-org/account").catch(() => {});
+
+function ConnectBody({ notice }: { notice?: string }) {
   const connectors = useConnectors();
   const { connectAsync } = useConnect();
+  const { disconnectAsync } = useDisconnect();
   const { isConnected } = useConnection();
-  const [busy, setBusy] = useState<Connector | null>(null);
-  const [error, setError] = useState<Err | null>(null);
+  const [busy, setBusy] = useState<string | null>(null); // connector id being connected
+  const [error, setError] = useState<Err | null>(notice ? { msg: notice, cancelled: false } : null);
   const [qr, setQr] = useState<string | null>(null);
+
+  // Each click is an attempt; only the latest may touch this UI. Back / close / unmount abandon it.
+  const attempt = useRef(0);
+  const offRef = useRef<(() => void) | undefined>(undefined);
+  const abandon = () => {
+    attempt.current++;
+    offRef.current?.();
+    offRef.current = undefined;
+  };
+  useEffect(() => abandon, []);
 
   // connected by any route (e.g. a phone scanned the QR): we're done
   useEffect(() => {
@@ -62,37 +85,60 @@ function ConnectBody() {
   const generic = connectors.find((c) => c.id === "injected");
   const hasWindowEthereum = typeof window !== "undefined" && "ethereum" in window;
   const browser = announced.length ? announced : generic && hasWindowEthereum ? [generic] : [];
-  const base = connectors.find((c) => c.id === "baseAccount");
   const wc = connectors.find((c) => c.id === "walletConnect");
 
   async function connect(c: Connector) {
+    abandon();
+    const id = attempt.current;
     setError(null);
-    setBusy(c);
-    let off: (() => void) | undefined;
+    setBusy(c.id);
     if (c.id === "walletConnect") {
       const onMessage = ({ type, data }: { type: string; data?: unknown }) => {
-        if (type === "display_uri" && typeof data === "string") setQr(data);
+        if (id === attempt.current && type === "display_uri" && typeof data === "string") setQr(data);
       };
       c.emitter.on("message", onMessage);
-      off = () => c.emitter.off("message", onMessage);
+      offRef.current = () => c.emitter.off("message", onMessage);
     }
     try {
       await connectAsync({ connector: c });
-      walletModal.close();
+      // a stale attempt that still went through (e.g. QR scanned after pressing Back): don't keep it
+      if (id !== attempt.current) await disconnectAsync({ connector: c }).catch(() => {});
+      else walletModal.close();
     } catch (e) {
-      const err = e as { shortMessage?: string; message?: string };
-      setError({ msg: (err.shortMessage ?? err.message ?? "Couldn't connect").split("\n")[0], cancelled: isRejection(e) });
+      if (id !== attempt.current) return;
+      setError({ msg: errMsg(e), cancelled: isRejection(e) });
       setQr(null);
     } finally {
-      off?.();
-      setBusy(null);
+      if (id === attempt.current) {
+        offRef.current?.();
+        offRef.current = undefined;
+        setBusy(null);
+      }
     }
   }
 
+  /** Base Account shows its own popup (or, if blocked, its own in-page dialog). A modal <dialog> sits in
+   *  the top layer above anything else, so we step aside first and reopen with the error if it fails. */
+  function connectBase() {
+    abandon();
+    const existing = connectors.find((c) => c.id === "baseAccount");
+    const p = connectAsync({ connector: existing ?? baseAccountConnector() });
+    walletModal.close();
+    p.catch((e) => {
+      if (!isRejection(e)) walletModal.open(`Base Account: ${errMsg(e)}`);
+    });
+  }
+
+  const back = () => {
+    abandon();
+    setQr(null);
+    setBusy(null);
+  };
+
   // ------------------------------------------------------------------ QR view (WalletConnect)
-  if (qr && busy?.id === "walletConnect") {
+  if (qr && busy === "walletConnect") {
     return (
-      <Shell title="Scan with your wallet" onBack={() => { setQr(null); setBusy(null); }}>
+      <Shell title="Scan with your wallet" onBack={back}>
         <div className="mx-auto w-fit rounded-xl bg-[#fffdf7] p-3 sketch-thin">
           <Qr value={qr} />
         </div>
@@ -117,13 +163,17 @@ function ConnectBody() {
             <Row
               key={c.uid}
               autoFocus={i === 0}
-              icon={c.icon ? (
-                // eslint-disable-next-line @next/next/no-img-element -- EIP-6963 icons are inline data: URIs
-                <img src={c.icon} alt="" className="h-7 w-7 rounded-md" />
-              ) : <IconWallet className="h-6 w-6" />}
+              icon={
+                c.icon ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- EIP-6963 icons are inline data: URIs
+                  <img src={c.icon} alt="" className="h-7 w-7 rounded-md" />
+                ) : (
+                  <IconWallet className="h-6 w-6" />
+                )
+              }
               name={c.id === "injected" ? "Browser wallet" : c.name}
               hint="Detected"
-              busy={busy?.uid === c.uid}
+              busy={busy === c.id}
               disabled={!!busy}
               onClick={() => connect(c)}
             />
@@ -133,31 +183,28 @@ function ConnectBody() {
         <NoBrowserWallet />
       )}
 
-      {(base || wc) && (
-        <Group label="Other ways">
-          {base && (
-            <Row
-              autoFocus={browser.length === 0}
-              icon={<BaseMark />}
-              name="Base Account"
-              hint="Passkey smart wallet, no extension"
-              busy={busy?.uid === base.uid}
-              disabled={!!busy}
-              onClick={() => connect(base)}
-            />
-          )}
-          {wc && (
-            <Row
-              icon={<IconQr className="h-6 w-6" />}
-              name="WalletConnect"
-              hint="Phone wallets, scan a QR"
-              busy={busy?.uid === wc.uid}
-              disabled={!!busy}
-              onClick={() => connect(wc)}
-            />
-          )}
-        </Group>
-      )}
+      <Group label="Other ways">
+        <Row
+          autoFocus={browser.length === 0}
+          icon={<BaseMark />}
+          name="Base Account"
+          hint="Passkey smart wallet, no extension"
+          busy={false}
+          disabled={!!busy}
+          onClick={connectBase}
+          onIntent={prefetchBase}
+        />
+        {wc && (
+          <Row
+            icon={<IconQr className="h-6 w-6" />}
+            name="WalletConnect"
+            hint="Phone wallets, scan a QR"
+            busy={busy === wc.id}
+            disabled={!!busy}
+            onClick={() => connect(wc)}
+          />
+        )}
+      </Group>
 
       {error && (
         <p role="alert" className={`break-words text-sm ${error.cancelled ? "text-muted" : "text-no"}`}>
@@ -176,7 +223,7 @@ function ConnectBody() {
 
 function Shell({ title, onBack, children }: { title: string; onBack?: () => void; children: React.ReactNode }) {
   return (
-    <div className="card-primary space-y-5 p-6">
+    <div className="card-primary max-h-[calc(100dvh-3rem)] space-y-5 overflow-y-auto overscroll-contain p-6">
       <div className="flex items-center gap-3">
         {onBack ? (
           <button type="button" className="btn-quiet -ml-2" onClick={onBack} aria-label="Back to wallets">
@@ -208,6 +255,7 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 
 function Row({
   autoFocus,
+  onIntent,
   icon,
   name,
   hint,
@@ -216,6 +264,8 @@ function Row({
   onClick,
 }: {
   autoFocus?: boolean;
+  /** hover / focus: a chance to prefetch before the click */
+  onIntent?: () => void;
   icon: React.ReactNode;
   name: string;
   hint: string;
@@ -227,7 +277,9 @@ function Row({
     <li>
       <button
         type="button"
-        autoFocus={autoFocus}
+        data-autofocus={autoFocus || undefined}
+        onPointerEnter={onIntent}
+        onFocus={onIntent}
         onClick={onClick}
         disabled={disabled}
         aria-busy={busy}

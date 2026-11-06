@@ -211,7 +211,7 @@ export function BetPanel({
           const on = yes === v;
           const look = on ? (v ? "btn-yes" : "btn-no") : `btn-ghost ${v ? "text-yes" : "text-no"}`;
           return (
-            <button key={String(v)} type="button" aria-pressed={on} onClick={() => setYes(v)} className={`${look} py-2.5 font-display text-2xl`}>
+            <button key={String(v)} type="button" aria-pressed={on} onClick={() => setYes(v)} className={`${look} py-2.5 text-lg font-bold tracking-wide`}>
               {v ? "YES" : "NO"}
             </button>
           );

@@ -46,7 +46,8 @@ export function AccountMenu() {
       <div
         id={id}
         popover="auto"
-        className="account-pop card-primary fixed inset-auto m-0 w-[min(21rem,calc(100vw-2rem))] p-5 text-ink"
+        tabIndex={-1}
+        className="account-pop card-primary fixed inset-auto m-0 max-h-[calc(100dvh-5.25rem)] w-[min(21rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain p-5 text-ink outline-none"
         style={{ top: "4.25rem", right: "max(1rem, calc((100vw - 64rem) / 2 + 1rem))" }}
       >
         <MenuBody address={address} chainId={chainId} connectorName={connector?.name} connectorIcon={connector?.icon} popoverId={id} />
@@ -90,6 +91,8 @@ function MenuBody({
     setSwitching(id);
     try {
       await switchChainAsync({ chainId: id as (typeof NETS)[number]["chain"]["id"] });
+      // the clicked row is now the current (disabled) row: keep keyboard focus inside the menu
+      document.getElementById(popoverId)?.focus();
     } catch (e) {
       const m = (e as { shortMessage?: string; message?: string }).shortMessage ?? (e as Error).message ?? "";
       setErr(/reject|denied|cancel/i.test(m) ? "Cancelled in your wallet." : m.split("\n")[0]);
@@ -155,9 +158,12 @@ function MenuBody({
               <li key={n.chain.id}>
                 <button
                   type="button"
-                  disabled={on || switching !== null}
+                  // only the current row is truly disabled; while a switch is pending the others are
+                  // aria-disabled (still focusable) so focus never drops to <body>
+                  disabled={on}
+                  aria-disabled={switching !== null || undefined}
                   aria-pressed={on}
-                  onClick={() => switchTo(n.chain.id)}
+                  onClick={() => switching === null && switchTo(n.chain.id)}
                   className={`flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left transition-colors duration-(--dur-quick) ${on ? "bg-hl/40" : "hover:bg-ink/5"} disabled:cursor-default`}
                 >
                   <ChainDot net={n} label={false} />
@@ -175,7 +181,9 @@ function MenuBody({
             );
           })}
         </ul>
-        {err && <p className="mt-1 text-sm text-muted">{err}</p>}
+        <p role="status" aria-live="polite" className="mt-1 text-sm text-muted empty:hidden">
+          {switching !== null ? `Confirm the switch to ${netByChainId(switching)?.name ?? "the new network"} in your wallet…` : (err ?? "")}
+        </p>
       </div>
 
       {/* footer */}

@@ -30,7 +30,7 @@ export function MarketList() {
             <Sparkle className="ml-2 inline-block h-6 w-6 align-top text-muted" />
             <br />
             <span className="relative inline-block">
-              <span className="highlight">from any chain.</span>
+              <span className="highlight italic">from any chain.</span>
               <Underline className="absolute -bottom-3 left-0 h-3.5 w-full text-ink" />
             </span>
           </h1>

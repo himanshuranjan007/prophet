@@ -14,7 +14,21 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const WC_PROJECT_ID = process.env.NEXT_PUBLIC_WC_PROJECT_ID;
 export const walletConnectEnabled = !!WC_PROJECT_ID;
 
+/** Base Account (passkey smart wallet). Telemetry off: no Coinbase analytics script or device id. */
+export const baseAccountConnector = () =>
+  baseAccount({ appName: "Prophet", appLogoUrl: `${SITE}/icon.svg`, preference: { telemetry: false } });
+
+/** wagmi's own record of the last connector used (default localStorage storage, JSON-serialized). */
+function recentConnectorId(): string | null {
+  try {
+    return JSON.parse(window.localStorage.getItem("wagmi.recentConnectorId") ?? "null");
+  } catch {
+    return null;
+  }
+}
+
 export function getConfig() {
+  const browser = typeof window !== "undefined";
   return createConfig({
     chains: [baseSepolia, arbitrumSepolia, sepolia],
     // Browser wallets announce themselves via EIP-6963 (MetaMask, Rabby, Coinbase extension…) and are
@@ -22,8 +36,12 @@ export function getConfig() {
     multiInjectedProviderDiscovery: true,
     connectors: [
       injected(),
-      baseAccount({ appName: "Prophet", appLogoUrl: `${SITE}/icon.svg` }),
-      ...(WC_PROJECT_ID
+      // wagmi's reconnect() calls getProvider() on every registered connector at page load, which would
+      // download the Base Account SDK (~115 KB) for every visitor. So it's registered only to restore a
+      // saved Base Account session; otherwise ConnectModal creates it when the user picks it.
+      ...(browser && recentConnectorId() === "baseAccount" ? [baseAccountConnector()] : []),
+      // Browser-only: WalletConnect opens a relay socket on init; never do that on the server.
+      ...(browser && WC_PROJECT_ID
         ? [
             walletConnect({
               projectId: WC_PROJECT_ID,

@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
-import { Caveat, Nunito } from "next/font/google";
+import { Caveat, Geist_Mono, Instrument_Serif, Inter } from "next/font/google";
 import Link from "next/link";
 import { Providers } from "./providers";
 import { ConnectButton } from "@/components/ConnectButton";
 import { CrystalBall, Rule } from "@/components/Doodles";
 import "./globals.css";
 
+// Instrument Serif: headlines (italic for emphasis). Inter: everything else. Caveat: the wordmark only.
+const instrument = Instrument_Serif({ variable: "--font-instrument", subsets: ["latin"], weight: "400", style: ["normal", "italic"] });
+const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const caveat = Caveat({ variable: "--font-caveat", subsets: ["latin"], weight: ["700"] });
-const body = Nunito({ variable: "--font-body", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -26,14 +29,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${caveat.variable} ${body.variable} h-full`}>
+    <html lang="en" className={`${instrument.variable} ${inter.variable} ${caveat.variable} ${geistMono.variable} h-full`}>
       <body className="flex min-h-full flex-col">
         <Providers>
           <header className="sticky top-0 z-20 bg-background/85 backdrop-blur-sm">
             <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
               <Link href="/" className="flex items-center gap-2" aria-label="Prophet home">
                 <CrystalBall className="h-8 w-8" />
-                <span className="font-display text-3xl leading-none">Prophet</span>
+                <span className="font-script text-3xl leading-none">Prophet</span>
                 <span className="ml-2 hidden items-center gap-1.5 text-xs font-semibold text-muted sm:inline-flex">
                   <span className="status-dot" /> testnet · CCIP 2.0
                 </span>

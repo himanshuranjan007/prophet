@@ -3,21 +3,22 @@
 import { useSyncExternalStore } from "react";
 
 /** App-wide "connect a wallet" modal state. Any component can open it (header, bet panel, resolve…). */
-type State = { open: boolean; nonce: number };
+type State = { open: boolean; nonce: number; notice?: string };
 
 let state: State = { open: false, nonce: 0 };
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
 
 export const walletModal = {
-  /** `nonce` changes on every open, so the modal body remounts with fresh state. */
-  open() {
-    state = { open: true, nonce: state.nonce + 1 };
+  /** `nonce` changes on every open, so the modal body remounts with fresh state.
+   *  `notice` is shown as an error line (e.g. a wallet flow that failed after the modal was closed). */
+  open(notice?: string) {
+    state = { open: true, nonce: state.nonce + 1, notice };
     emit();
   },
   close() {
     if (!state.open) return;
-    state = { ...state, open: false };
+    state = { ...state, open: false, notice: undefined };
     emit();
   },
 };

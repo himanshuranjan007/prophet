@@ -21,10 +21,12 @@ const HL = "#ffd43b";
 const font = (pkg: string, file: string) => readFile(join(process.cwd(), "node_modules/@fontsource", pkg, "files", file));
 
 // Fonts don't depend on the request: read them once per server instance.
-const [caveat, nunito, nunitoBlack] = await Promise.all([
+const [caveat, serif, serifItalic, inter, interBold] = await Promise.all([
   font("caveat", "caveat-latin-700-normal.woff"),
-  font("nunito", "nunito-latin-400-normal.woff"),
-  font("nunito", "nunito-latin-800-normal.woff"),
+  font("instrument-serif", "instrument-serif-latin-400-normal.woff"),
+  font("instrument-serif", "instrument-serif-latin-400-italic.woff"),
+  font("inter", "inter-latin-400-normal.woff"),
+  font("inter", "inter-latin-700-normal.woff"),
 ]);
 
 /** Marker swipe across the lower half of the letters, per word so it never becomes a full-width slab. */
@@ -61,7 +63,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           backgroundSize: "34px 34px",
           color: INK,
           padding: "52px 64px 48px",
-          fontFamily: "Nunito",
+          fontFamily: "Inter",
         }}
       >
         {/* brand */}
@@ -78,7 +80,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         </div>
 
         {/* question */}
-        <div style={{ display: "flex", flexWrap: "wrap", fontFamily: "Caveat", fontSize: qSize, lineHeight: 1.08, marginRight: -18 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", fontFamily: "Instrument Serif", fontSize: qSize, lineHeight: 1.06, marginRight: -18 }}>
           {question.split(/\s+/).map((w, i) => (
             <span key={i} style={{ backgroundImage: marker, paddingRight: Math.round(qSize * 0.22) }}>
               {w}
@@ -90,7 +92,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {m && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 44, fontWeight: 800, lineHeight: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 42, fontWeight: 700, lineHeight: 1 }}>
                 <span style={{ color: YES }}>YES {yes}%</span>
                 <span style={{ color: NO }}>{100 - yes}% NO</span>
               </div>
@@ -123,8 +125,10 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       ...size,
       fonts: [
         { name: "Caveat", data: caveat, style: "normal", weight: 700 },
-        { name: "Nunito", data: nunito, style: "normal", weight: 400 },
-        { name: "Nunito", data: nunitoBlack, style: "normal", weight: 800 },
+        { name: "Instrument Serif", data: serif, style: "normal", weight: 400 },
+        { name: "Instrument Serif", data: serifItalic, style: "italic", weight: 400 },
+        { name: "Inter", data: inter, style: "normal", weight: 400 },
+        { name: "Inter", data: interBold, style: "normal", weight: 700 },
       ],
     },
   );
