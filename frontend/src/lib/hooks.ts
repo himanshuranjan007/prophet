@@ -89,12 +89,12 @@ const roundCache = new Map<string, FeedRound[]>();
  * Includes the last round before `fromSec` so a step line can start at the window edge.
  * Walks round ids backwards within the current phase (proxy ids are phase<<64 | aggregatorRound).
  */
-export function useFeedHistory(chainId: AppChain["id"] | undefined, feed: Address | undefined, fromSec: number) {
+export function useFeedHistory(chainId: AppChain["id"] | undefined, feed: Address | undefined, fromSec: number, pollMs = 15_000) {
   const client = usePublicClient({ chainId });
   return useQuery({
     queryKey: ["feedHistory", chainId, feed, fromSec],
     enabled: !!client && !!feed && fromSec > 0,
-    refetchInterval: 15_000,
+    refetchInterval: pollMs,
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<FeedRound[]> => {
       const key = `${chainId}:${feed!.toLowerCase()}`;
@@ -163,7 +163,8 @@ export function useRelayState(asset: Asset | undefined) {
     abi: relayedFeedAbi,
     functionName: "latestRoundData",
     chainId: HUB_CHAIN.id,
-    query: { enabled: !!asset?.relay },
+    // RelayedFeed reverts NoData until the first round lands: that's a state, not a failure to retry
+    query: { enabled: !!asset?.relay, retry: false },
   });
   const quote = useReadContract({
     address: asset?.relay?.relayer,
@@ -176,7 +177,7 @@ export function useRelayState(asset: Asset | undefined) {
   return {
     /** latest price stored on Base (undefined until the first relay lands) */
     onHub: relayed.data ? { price: relayed.data[1], t: Number(relayed.data[3]), id: relayed.data[0] } : undefined,
-    hubLoading: relayed.isLoading,
+    hubLoading: relayed.isLoading && !relayed.isError,
     fee: quote.data?.[0],
     /** the source has a round the relayer hasn't sent yet */
     hasNew: quote.data?.[1] ?? false,

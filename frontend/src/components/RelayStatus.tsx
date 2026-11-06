@@ -30,7 +30,10 @@ export function RelayStatus({ asset, now }: { asset: Asset; now: number }) {
 
   if (!asset.relay || !relay) return null;
   const src = netByChainId(asset.source.chainId)!;
+  // Base is behind the source feed; `hasNew` = that round hasn't been sent yet (else it's already in flight)
   const behind = !!source && (!relay.onHub || source.updatedAt > relay.onHub.t);
+  const canRelay = behind && relay.hasNew;
+  const inFlight = behind && !relay.hasNew && !sent;
 
   const push = () =>
     action.run(async (step) => {
@@ -63,7 +66,7 @@ export function RelayStatus({ asset, now }: { asset: Asset; now: number }) {
             · {asset.symbol}/USD is relayed from {src.short} over CCIP ({asset.relay.lag})
           </span>
         </p>
-        {behind && !sent && (
+        {canRelay && !sent && (
           <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={!isConnected || action.busy} onClick={push}>
             <IconPlane className="h-4 w-4" />
             {action.step ?? (isConnected ? "Relay latest price" : "Connect to relay")}
@@ -87,8 +90,13 @@ export function RelayStatus({ asset, now }: { asset: Asset; now: number }) {
             · on {src.short}: <span className="font-semibold text-ink">{fmtUsd(source.price)}</span> from {ago(source.updatedAt, now)}
           </>
         )}
-        {behind && relay.fee !== undefined && !sent && <> · relay fee ≈ {Number(formatEther(relay.fee)).toFixed(6)} ETH</>}
+        {canRelay && relay.fee !== undefined && !sent && <> · relay fee ≈ {Number(formatEther(relay.fee)).toFixed(6)} ETH</>}
       </p>
+      {inFlight && (
+        <p className="flex flex-wrap items-center gap-x-2 text-muted">
+          <IconPlane className="wiggle h-4 w-4 text-ink" /> The latest {asset.symbol} price is already on its way to Base ({asset.relay.lag}).
+        </p>
+      )}
       {sent && (
         <p className="flex flex-wrap items-center gap-x-2 text-muted">
           <IconPlane className="wiggle h-4 w-4 text-ink" /> Relaying over CCIP, lands on Base in {asset.relay.lag}.

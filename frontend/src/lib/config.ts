@@ -87,6 +87,8 @@ export type Asset = {
   strikeStep: number;
   /** Feed's update rule, shown under charts. */
   cadence: string;
+  /** Feed heartbeat (s): a new round is published at least this often. */
+  heartbeat: number;
 };
 
 export const ASSETS: Asset[] = [
@@ -97,6 +99,7 @@ export const ASSETS: Asset[] = [
     source: { chainId: baseSepolia.id, feed: ETH_USD_FEED },
     strikeStep: 10,
     cadence: "updates on 0.15% moves or every 20 min",
+    heartbeat: 1200,
   },
   {
     symbol: "BTC",
@@ -105,6 +108,7 @@ export const ASSETS: Asset[] = [
     source: { chainId: baseSepolia.id, feed: "0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298" },
     strikeStep: 100,
     cadence: "updates on 0.1% moves or every 20 min",
+    heartbeat: 1200,
   },
   {
     symbol: "SOL",
@@ -115,6 +119,7 @@ export const ASSETS: Asset[] = [
     relay: { relayer: "0x7d043Ca653CC66bB472f4F5FE84E91E69C90Ed8F", lag: "~25 min" },
     strikeStep: 0.5,
     cadence: "updates on 0.5% moves or every 24 h",
+    heartbeat: 86400,
   },
 ];
 
