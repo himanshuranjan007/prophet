@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Providers } from "./providers";
 import { ConnectButton } from "@/components/ConnectButton";
 import { CrystalBall, Rule } from "@/components/Doodles";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { THEME_SCRIPT } from "@/lib/theme-script";
 import "./globals.css";
 
 // Instrument Serif: headlines (italic for emphasis). Inter: everything else. Caveat: the wordmark only.
@@ -29,7 +31,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${instrument.variable} ${inter.variable} ${caveat.variable} ${geistMono.variable} h-full`}>
+    // suppressHydrationWarning: THEME_SCRIPT may set data-theme on <html> before React hydrates
+    <html lang="en" suppressHydrationWarning className={`${instrument.variable} ${inter.variable} ${caveat.variable} ${geistMono.variable} h-full`}>
+      <head>
+        {/* apply a saved light/dark choice before first paint (no flash of the wrong theme) */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col">
         <Providers>
           <header className="sticky top-0 z-20 bg-background/85 backdrop-blur-sm">
@@ -46,6 +53,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 <Link href="/portfolio" className="btn-quiet max-sm:hidden">
                   Positions
                 </Link>
+                <ThemeToggle />
                 <ConnectButton />
               </nav>
             </div>

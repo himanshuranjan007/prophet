@@ -38,6 +38,22 @@ Instrument Serif for words that headline, Inter for everything you read or opera
 - Chain colours: only inside `<ChainDot>`.
 - `muted` for secondary text. No other colours (no pink, no blue, no emoji, including in share/post text).
 - Errors: `text-sm text-no` (via `<ActionError>`); a wallet rejection shows muted "Cancelled in wallet.".
+- **Text vs fill.** `text-yes` / `text-no` / `bg-yes` / `bg-no` (outcome words, stakes, YES/NO buttons) use the
+  text-safe pair `--yes-text` / `--no-text` (>= 4.5:1 on card, paper and every wash, both themes). Fills (hatches,
+  pool bars, chart washes, card stripes) use `var(--yes)` / `var(--no)`, the CVD-validated pair. Don't swap them.
+- **Closed markets ("outcome wash").** A closed card is tinted by its result and gets a hand-drawn stripe on the
+  left edge plus a big result word: `bg-wash-wait` (awaiting the Chainlink price), `bg-wash-yes`, `bg-wash-no`,
+  `bg-wash-void`. Text on a wash stays ink / muted. The pool bar greys the losing side (both if void) and drops
+  the "pays" multipliers once a market is resolved (`PoolBar` does this from `market.outcome`).
+
+## Theme
+
+- Follows the system by default. The header sun/moon (`ThemeToggle`) sets `<html data-theme="light|dark">`
+  (saved in localStorage; picking the system's theme clears the override). `THEME_SCRIPT` in `<head>` applies it
+  before paint.
+- Every colour is a token on `:root` with a dark block for `prefers-color-scheme: dark` (unless
+  `data-theme="light"`) and an identical block for `data-theme="dark"`. Keep the two dark blocks in sync. Never
+  hard-code a colour in a component (exceptions: the WalletConnect QR, which must stay dark-on-light, and OG images).
 
 ## Surfaces
 

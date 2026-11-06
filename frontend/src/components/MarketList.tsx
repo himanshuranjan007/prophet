@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ASSETS, NETS, Outcome, assetByFeed, type Asset } from "@/lib/config";
+import { ASSETS, NETS, Outcome, assetByFeed, type Asset, type Market } from "@/lib/config";
 import { countdown, fmtUsd } from "@/lib/format";
 import { useAssetPrice, useMarkets, useNow } from "@/lib/hooks";
 import { ChainDot } from "./ChainDot";
 import { CreateMarket } from "./CreateMarket";
-import { IconClock, Sparkle, Underline } from "./Doodles";
+import { IconCheck, IconClock, IconReturn, Sparkle, Underline } from "./Doodles";
 import { PoolBar } from "./PoolBar";
 import { Sparkline, useChange } from "./Sparkline";
 import { StatusLabel } from "./ui";
@@ -121,9 +121,27 @@ function AssetRow({ asset, now }: { asset: Asset; now: number }) {
   );
 }
 
+type Closed = "wait" | "yes" | "no" | "void";
+/** Closed-market treatment ("outcome wash"): tint, edge stripe, big result word. */
+const CLOSED: Record<Closed, { bg: string; stripe: string; word: React.ReactNode; icon: React.ReactNode }> = {
+  wait: { bg: "bg-wash-wait", stripe: "var(--hl)", word: "Awaiting Chainlink price", icon: <IconClock className="h-5 w-5 shrink-0" /> },
+  yes: { bg: "bg-wash-yes", stripe: "var(--yes)", word: <><span className="text-yes">YES</span> won</>, icon: <IconCheck className="h-5 w-5 shrink-0" /> },
+  no: { bg: "bg-wash-no", stripe: "var(--no)", word: <><span className="text-no">NO</span> won</>, icon: <IconCheck className="h-5 w-5 shrink-0" /> },
+  void: { bg: "bg-wash-void", stripe: "var(--muted)", word: "Void · refunded", icon: <IconReturn className="h-5 w-5 shrink-0" /> },
+};
+
+function closedState(m: Market, now: number): Closed | null {
+  if (m.outcome === Outcome.Yes) return "yes";
+  if (m.outcome === Outcome.No) return "no";
+  if (m.outcome === Outcome.Invalid) return "void";
+  return now > 0 && now >= Number(m.closeTime) ? "wait" : null;
+}
+
 function MarketCard({ m, now }: { m: ListedMarket; now: number }) {
   const openNow = m.outcome === Outcome.Unresolved && now < Number(m.closeTime);
   const asset = assetByFeed(m.feed);
+  const closed = closedState(m, now);
+  if (closed) return <ClosedCard m={m} state={closed} />;
   return (
     <Link
       href={`/market/${m.id}`}
@@ -140,6 +158,35 @@ function MarketCard({ m, now }: { m: ListedMarket; now: number }) {
       </div>
       <div className="flex-1 font-display text-[1.6rem] leading-tight break-words">{m.question}</div>
       {asset && openNow && <Sparkline asset={asset} now={now} hours={6} strike={m.strike} />}
+      <PoolBar market={m} />
+    </Link>
+  );
+}
+
+function ClosedCard({ m, state }: { m: ListedMarket; state: Closed }) {
+  const c = CLOSED[state];
+  const settled = m.finalPrice > 0n && (state === "yes" || state === "no");
+  const diff = m.finalPrice - m.strike;
+  return (
+    <Link
+      href={`/market/${m.id}`}
+      className={`card relative flex h-full flex-col gap-3 overflow-hidden p-5 pl-7 ${c.bg} transition-[translate,box-shadow] duration-(--dur-quick) ease-(--ease-out) hover:-translate-y-px hover:shadow-(--shadow-sm) motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:p-6 sm:pl-8`}
+    >
+      {/* hand-drawn stripe down the left edge, in the result's colour */}
+      <svg aria-hidden viewBox="0 0 8 100" preserveAspectRatio="none" className="absolute inset-y-4 left-2.5 h-[calc(100%-2rem)] w-2">
+        <path d="M4 1c-1 16 1 33 0 49s1 33 0 49" stroke={c.stripe} strokeWidth="5" strokeLinecap="round" fill="none" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <div className="flex items-center gap-2 font-display text-2xl leading-none">
+        {c.icon}
+        <span>{c.word}</span>
+      </div>
+      <div className="flex-1 font-display text-[1.45rem] leading-tight break-words">{m.question}</div>
+      {settled && (
+        <p className="num text-sm text-muted">
+          Settled at <span className="font-semibold text-ink">{fmtUsd(m.finalPrice)}</span> · {fmtUsd(diff < 0n ? -diff : diff)}{" "}
+          {diff > 0n ? "above" : diff < 0n ? "below" : "at"} strike
+        </p>
+      )}
       <PoolBar market={m} />
     </Link>
   );
