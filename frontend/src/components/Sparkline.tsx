@@ -54,7 +54,8 @@ export function Sparkline({
 export function useChange(asset: Asset, now: number, hours = 24) {
   const from = now > 0 ? Math.floor((now - hours * 3600) / 300) * 300 : 0;
   const { data } = useFeedHistory(asset.source.chainId, asset.source.feed, from);
-  if (!data || data.length < 2) return undefined;
+  // only a full window earns the "24h" label: the first round must be at/before the window start
+  if (!data || data.length < 2 || data[0].t > from) return undefined;
   const a = Number(data[0].price);
   const b = Number(data[data.length - 1].price);
   return ((b - a) / a) * 100;

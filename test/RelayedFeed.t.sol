@@ -55,9 +55,9 @@ contract RelayedFeedTest is Test {
         assertEq(a2, 152e8);
     }
 
-    function test_relayRevertsWhenNothingNew() public {
+    function test_relayRevertsWhenAlreadySent() public {
         relayer.relay();
-        vm.expectRevert(abi.encodeWithSelector(FeedRelayer.NothingNew.selector, block.timestamp));
+        vm.expectRevert(abi.encodeWithSelector(FeedRelayer.AlreadySent.selector, uint80(1)));
         relayer.relay();
         (, bool hasNew) = relayer.quote();
         assertFalse(hasNew);
@@ -112,6 +112,62 @@ contract RelayedFeedTest is Test {
         mirror.getRoundData(0);
     }
 
+    // ------------------------------------------------------------ ordering (CCIP 2.0 has none)
+    function _deliver(uint80 srcRound, int256 answer, uint256 t) internal {
+        Client.Any2EVMMessage memory m = Client.Any2EVMMessage({
+            messageId: keccak256(abi.encode(srcRound)),
+            sourceChainSelector: selector,
+            sender: abi.encode(address(relayer)),
+            data: abi.encode(srcRound, answer, t, t),
+            destTokenAmounts: new Client.EVMTokenAmount[](0)
+        });
+        vm.prank(address(router));
+        mirror.ccipReceive(m);
+    }
+
+    function test_outOfOrderRoundsWaitForTheGap() public {
+        _deliver(1, 100e8, 1000); // genesis
+        _deliver(3, 103e8, 3000); // early: buffered
+        assertEq(mirror.latestId(), 1, "round 3 must not skip round 2");
+        (,,, uint256 bufT,) = _bufferedOf(3);
+        assertEq(bufT, 3000);
+        _deliver(2, 102e8, 2000); // fills the gap -> 2 then 3 drained
+        assertEq(mirror.latestId(), 3);
+        assertEq(mirror.sourceRoundOf(2), 2);
+        assertEq(mirror.sourceRoundOf(3), 3);
+        (, int256 a3,,,) = mirror.getRoundData(3);
+        assertEq(a3, 103e8);
+    }
+
+    function test_drainIsBoundedPerMessageAndPublic() public {
+        _deliver(1, 1, 1000);
+        for (uint80 r = 3; r <= 7; r++) _deliver(r, int256(uint256(r)), 1000 * r);
+        _deliver(2, 2, 2000); // appends 2, then drains at most 2 (3, 4)
+        assertEq(mirror.latestId(), 4);
+        mirror.drain(10); // anyone can finish the job
+        assertEq(mirror.latestId(), 7);
+        assertEq(mirror.sourceRoundOf(7), 7);
+    }
+
+    function test_relayRoundCanBackfillASpecificRound() public {
+        relayer.relay(); // src 1
+        vm.warp(block.timestamp + 60);
+        sol.updateAnswer(151e8); // src 2
+        vm.warp(block.timestamp + 60);
+        sol.updateAnswer(152e8); // src 3
+        relayer.relayRound(3); // later round first -> buffered (local router delivers instantly)
+        assertEq(mirror.latestId(), 1);
+        relayer.relayRound(2);
+        assertEq(mirror.latestId(), 3);
+        vm.expectRevert(abi.encodeWithSelector(FeedRelayer.AlreadySent.selector, uint80(2)));
+        relayer.relayRound(2);
+    }
+
+    function _bufferedOf(uint80 src) internal view returns (int256, uint64, uint64, uint256, uint80) {
+        (int256 answer, uint64 startedAt, uint64 updatedAt, uint80 sourceRoundId) = mirror.buffered(src);
+        return (answer, startedAt, updatedAt, updatedAt, sourceRoundId);
+    }
+
     // ------------------------------------------------------------ hub integration
     function _hubWithSolMarket() internal returns (uint64 closeTime) {
         hub = new PredictionHub(address(router), address(bnm), address(link));
@@ -129,6 +185,22 @@ contract RelayedFeedTest is Test {
         hub.bet(0, true, 1 ether);
         vm.prank(bob);
         hub.bet(0, false, 1 ether);
+    }
+
+    function test_relayingOnlyALaterRoundCannotSkipTheFirstAfterClose() public {
+        uint64 closeTime = _hubWithSolMarket(); // src 1 relayed
+        vm.warp(closeTime + 30);
+        sol.updateAnswer(155e8); // src 2: first after close -> YES
+        vm.warp(closeTime + 700);
+        sol.updateAnswer(140e8); // src 3: later -> NO
+        relayer.relayRound(3); // a NO holder relays only the later round
+        assertEq(hub.findResolutionRound(0), 0, "can't resolve on round 3 while round 2 is missing");
+        relayer.relayRound(2); // anyone backfills the real first-after-close round
+        uint80 r = hub.findResolutionRound(0);
+        assertEq(mirror.sourceRoundOf(r), 2);
+        hub.resolve(0, r);
+        assertEq(uint8(hub.getMarket(0).outcome), uint8(PredictionHub.Outcome.Yes));
+        assertEq(hub.getMarket(0).finalPrice, 155e8);
     }
 
     function test_hubSettlesSolMarketOnFirstRelayedRoundAfterClose() public {

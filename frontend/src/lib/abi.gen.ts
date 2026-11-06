@@ -1331,6 +1331,40 @@ export const relayedFeedAbi = [
   },
   {
     "type": "function",
+    "name": "buffered",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint80",
+        "internalType": "uint80"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "answer",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "startedAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "updatedAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "sourceRoundId",
+        "type": "uint80",
+        "internalType": "uint80"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "ccipReceive",
     "inputs": [
       {
@@ -1406,6 +1440,19 @@ export const relayedFeedAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "drain",
+    "inputs": [
+      {
+        "name": "max",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1494,6 +1541,19 @@ export const relayedFeedAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastSourceRound",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint80",
+        "internalType": "uint80"
       }
     ],
     "stateMutability": "view"
@@ -1693,6 +1753,31 @@ export const relayedFeedAbi = [
   },
   {
     "type": "event",
+    "name": "RoundBuffered",
+    "inputs": [
+      {
+        "name": "sourceRoundId",
+        "type": "uint80",
+        "indexed": true,
+        "internalType": "uint80"
+      },
+      {
+        "name": "waitingFor",
+        "type": "uint80",
+        "indexed": false,
+        "internalType": "uint80"
+      },
+      {
+        "name": "ccipMessageId",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "RoundIgnored",
     "inputs": [
       {
@@ -1700,12 +1785,6 @@ export const relayedFeedAbi = [
         "type": "uint80",
         "indexed": false,
         "internalType": "uint80"
-      },
-      {
-        "name": "updatedAt",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
       },
       {
         "name": "ccipMessageId",
@@ -1743,12 +1822,6 @@ export const relayedFeedAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
-      },
-      {
-        "name": "ccipMessageId",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
       }
     ],
     "anonymous": false
@@ -1909,19 +1982,6 @@ export const feedRelayerAbi = [
   },
   {
     "type": "function",
-    "name": "lastSentUpdatedAt",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "quote",
     "inputs": [],
     "outputs": [
@@ -1940,11 +2000,49 @@ export const feedRelayerAbi = [
   },
   {
     "type": "function",
+    "name": "quoteRound",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint80",
+        "internalType": "uint80"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "relay",
     "inputs": [],
     "outputs": [
       {
-        "name": "messageId",
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "relayRound",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint80",
+        "internalType": "uint80"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -1960,6 +2058,25 @@ export const feedRelayerAbi = [
         "name": "",
         "type": "address",
         "internalType": "contract IRouterClient"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "sent",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint80",
+        "internalType": "uint80"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -2003,6 +2120,17 @@ export const feedRelayerAbi = [
   },
   {
     "type": "error",
+    "name": "AlreadySent",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint80",
+        "internalType": "uint80"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InsufficientFee",
     "inputs": [
       {
@@ -2019,12 +2147,12 @@ export const feedRelayerAbi = [
   },
   {
     "type": "error",
-    "name": "NothingNew",
+    "name": "NoRound",
     "inputs": [
       {
-        "name": "updatedAt",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "roundId",
+        "type": "uint80",
+        "internalType": "uint80"
       }
     ]
   },

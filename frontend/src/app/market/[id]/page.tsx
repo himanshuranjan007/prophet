@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { MarketNotFound, MarketSkeleton, MarketView } from "@/components/MarketView";
 import { getMarket } from "@/lib/server";
 import { fmtToken, odds } from "@/lib/format";
@@ -35,6 +36,8 @@ export default function Page(props: Props) {
 }
 
 async function MarketPage({ params, searchParams }: Props) {
+  // per-request page (live market data): tells Next the route, and so its metadata, is dynamic
+  await connection();
   const { id } = await params;
   const sp = await searchParams;
   const side = sp.side === "yes" || sp.side === "no" ? sp.side : undefined;

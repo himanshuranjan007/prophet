@@ -277,10 +277,51 @@ body {
   animation: wiggle 1.2s ease-in-out infinite;
 }
 
+/* ---------------------------------------------------------------- live chart
+   New Chainlink round: its step draws in like a pen stroke, a ripple marks it,
+   and the head dot + price tag glide to the new price. */
+@keyframes pen {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@utility chart-pen {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: pen var(--dur-slow) var(--ease-out) both;
+}
+@keyframes ripple {
+  from {
+    r: 4px;
+    opacity: 0.55;
+  }
+  to {
+    r: 22px;
+    opacity: 0;
+  }
+}
+@utility chart-ripple {
+  opacity: 0;
+  animation: ripple 1.1s var(--ease-out) 0.25s both;
+}
+@utility chart-glide {
+  transition: transform var(--dur-slow) var(--ease-ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .draw-in {
     animation: none;
     stroke-dashoffset: 0;
+  }
+  .chart-pen,
+  .chart-ripple {
+    animation: none;
+  }
+  .chart-glide {
+    transition: none;
   }
   .wiggle,
   .skeleton {

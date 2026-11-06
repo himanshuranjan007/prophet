@@ -43,13 +43,17 @@
       "kind": "native"
     },
     "SOL": {
-      "feed": "0x61053fdf7ab0f5681060309ED5a8dA7A24616A9A",
+      "feed": "0x7feAA707fB0847B782f61509a7B4cf8A15055B35",
       "chain": "baseSepolia",
-      "kind": "relayed via CCIP",
+      "kind": "relayed via CCIP (ordered)",
       "sourceFeed": "0x32377717BC9F9bA8Db45A244bCE77e7c0Cc5A775",
       "sourceChain": "arbitrumSepolia",
-      "relayer": "0x7d043Ca653CC66bB472f4F5FE84E91E69C90Ed8F",
-      "firstRelayTx": "0xcfa2005cd5207ed412387553b9e89bf581347389994bdbf9e3b694e8f9373c8b"
+      "relayer": "0xbDe2FC16e9811Ee5bEa0A69568f16d9D207F5B40",
+      "retired": {
+        "feed": "0x61053fdf7ab0f5681060309ED5a8dA7A24616A9A",
+        "relayer": "0x7d043Ca653CC66bB472f4F5FE84E91E69C90Ed8F",
+        "note": "latest-only relay; disallowed on hub; market #2 still bound to it"
+      }
     }
   }
 }

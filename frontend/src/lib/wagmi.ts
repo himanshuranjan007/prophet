@@ -1,9 +1,13 @@
-import { createConfig, http } from "wagmi";
+import { createConfig, fallback, http } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { arbitrumSepolia, baseSepolia, sepolia } from "viem/chains";
 import { NETS } from "./config";
 
-const rpc = (id: number) => NETS.find((n) => n.chain.id === id)!.rpc;
+/** Primary RPC, then the fallback (viem retries the next transport when one errors, e.g. log-range limits). */
+const rpc = (id: number) => {
+  const n = NETS.find((x) => x.chain.id === id)!;
+  return n.rpcFallback ? fallback([http(n.rpc), http(n.rpcFallback)]) : http(n.rpc);
+};
 
 export function getConfig() {
   return createConfig({
@@ -11,9 +15,9 @@ export function getConfig() {
     connectors: [injected()],
     ssr: true,
     transports: {
-      [baseSepolia.id]: http(rpc(baseSepolia.id)),
-      [arbitrumSepolia.id]: http(rpc(arbitrumSepolia.id)),
-      [sepolia.id]: http(rpc(sepolia.id)),
+      [baseSepolia.id]: rpc(baseSepolia.id),
+      [arbitrumSepolia.id]: rpc(arbitrumSepolia.id),
+      [sepolia.id]: rpc(sepolia.id),
     },
   });
 }

@@ -32,8 +32,10 @@ export function RelayStatus({ asset, now }: { asset: Asset; now: number }) {
   const src = netByChainId(asset.source.chainId)!;
   // Base is behind the source feed; `hasNew` = that round hasn't been sent yet (else it's already in flight)
   const behind = !!source && (!relay.onHub || source.updatedAt > relay.onHub.t);
-  const canRelay = behind && relay.hasNew;
-  const inFlight = behind && !relay.hasNew && !sent;
+  // Base takes rounds strictly in order: fill the next missing round first, else push the latest
+  const gap = relay.gap !== undefined && source && relay.gap <= source.roundId ? relay.gap : undefined;
+  const canRelay = behind && (gap !== undefined || relay.hasNew);
+  const inFlight = behind && !canRelay && !sent;
 
   const push = () =>
     action.run(async (step) => {
@@ -41,16 +43,31 @@ export function RelayStatus({ asset, now }: { asset: Asset; now: number }) {
       step(`Switching to ${src.short}…`);
       if (chainId !== src.chain.id) await switchChainAsync({ chainId: src.chain.id });
       step("Quoting the CCIP fee…");
-      const [fee, hasNew] = await readContract(config, { address: asset.relay!.relayer, abi: feedRelayerAbi, functionName: "quote", chainId: src.chain.id });
-      if (!hasNew) throw new Error("The latest price is already on its way to Base.");
-      step("Confirm the relay in your wallet…");
-      const h = await writeContract(config, {
-        address: asset.relay!.relayer,
-        abi: feedRelayerAbi,
-        functionName: "relay",
-        value: (fee * 12n) / 10n, // buffer; the relayer refunds the excess
-        chainId: src.chain.id,
-      });
+      const relayer = asset.relay!.relayer;
+      let h: `0x${string}`;
+      if (gap !== undefined) {
+        const fee = await readContract(config, { address: relayer, abi: feedRelayerAbi, functionName: "quoteRound", args: [gap], chainId: src.chain.id });
+        step("Confirm the relay in your wallet…");
+        h = await writeContract(config, {
+          address: relayer,
+          abi: feedRelayerAbi,
+          functionName: "relayRound",
+          args: [gap],
+          value: (fee * 12n) / 10n, // buffer; the relayer refunds the excess
+          chainId: src.chain.id,
+        });
+      } else {
+        const [fee, hasNew] = await readContract(config, { address: relayer, abi: feedRelayerAbi, functionName: "quote", chainId: src.chain.id });
+        if (!hasNew) throw new Error("The latest price is already on its way to Base.");
+        step("Confirm the relay in your wallet…");
+        h = await writeContract(config, {
+          address: relayer,
+          abi: feedRelayerAbi,
+          functionName: "relay",
+          value: (fee * 12n) / 10n,
+          chainId: src.chain.id,
+        });
+      }
       step("Sending over CCIP…");
       await waitForTransactionReceipt(config, { hash: h, chainId: src.chain.id });
       setSent(h);
@@ -69,7 +86,7 @@ export function RelayStatus({ asset, now }: { asset: Asset; now: number }) {
         {canRelay && !sent && (
           <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={!isConnected || action.busy} onClick={push}>
             <IconPlane className="h-4 w-4" />
-            {action.step ?? (isConnected ? "Relay latest price" : "Connect to relay")}
+            {action.step ?? (isConnected ? (gap !== undefined ? "Relay next price" : "Relay latest price") : "Connect to relay")}
           </button>
         )}
       </div>

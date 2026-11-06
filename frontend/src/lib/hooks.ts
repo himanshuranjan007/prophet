@@ -79,79 +79,125 @@ export function useEthPrice() {
 export type FeedRound = { id: bigint; price: bigint; t: number };
 
 const LOW64 = (1n << 64n) - 1n;
-const BATCH = 60;
-const MAX_ROUNDS = 400;
-/** Per-feed cache of rounds already fetched (ascending by time); each poll only reads new rounds. */
-const roundCache = new Map<string, FeedRound[]>();
+const CHUNK = 250; // getRoundData calls per multicall (sequential: public RPCs rate-limit bursts)
+const MAX_WINDOW = 3_000n; // rounds per request (24h of BTC is ~500)
+const MAX_CACHE = 8_000; // rounds kept per feed (by recency of updatedAt)
+const PROBES = 18; // exponential probes: 1, 2, 4 … 131,072 rounds back
+
+type FeedCache = { rounds: Map<bigint, FeedRound>; anchors: Map<number, bigint> };
+/** Per-feed cache: rounds by id (never partial: a failed chunk throws and is retried) + window anchors. */
+const caches = new Map<string, FeedCache>();
+
+type Client = NonNullable<ReturnType<typeof usePublicClient>>;
+
+async function readRounds(client: Client, feed: Address, ids: bigint[]): Promise<FeedRound[]> {
+  const out: FeedRound[] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    // allowFailure: false -> any failed call rejects the query (React Query retries) instead of leaving holes
+    const res = await client.multicall({
+      contracts: ids
+        .slice(i, i + CHUNK)
+        .map((rid) => ({ address: feed, abi: feedAbi, functionName: "getRoundData", args: [rid] }) as const),
+      allowFailure: false,
+    });
+    for (const r of res) {
+      const [rid, answer, , updatedAt] = r as readonly [bigint, bigint, bigint, bigint, bigint];
+      if (updatedAt > 0n) out.push({ id: rid, price: answer, t: Number(updatedAt) });
+    }
+  }
+  return out;
+}
 
 /**
- * Chainlink rounds for `feed` on `chainId` covering at least [fromSec, now], oldest first.
- * Includes the last round before `fromSec` so a step line can start at the window edge.
- * Walks round ids backwards within the current phase (proxy ids are phase<<64 | aggregatorRound).
+ * Bracket `target` with one multicall: probe rounds 2^k - 1 back from `latest` (within the phase).
+ * Returns [lo, hi] with t(lo) < target <= t(hi) (lo = phase start if nothing is older than target).
+ * updatedAt is monotonic within a phase, so the window start lies in (lo, hi].
  */
-export function useFeedHistory(chainId: AppChain["id"] | undefined, feed: Address | undefined, fromSec: number, pollMs = 15_000) {
+async function bracket(client: Client, feed: Address, target: number, first: bigint, latest: bigint) {
+  const ids = [...new Set(Array.from({ length: PROBES }, (_, k) => {
+    const id = latest - ((1n << BigInt(k)) - 1n);
+    return id >= first ? id : first;
+  }))]; // descending
+  const got = await readRounds(client, feed, ids);
+  let lo = first;
+  let hi = latest;
+  for (const r of got.sort((a, b) => (a.id > b.id ? -1 : 1))) {
+    if (r.t < target) {
+      lo = r.id;
+      break;
+    }
+    hi = r.id;
+  }
+  return [lo, hi] as const;
+}
+
+/**
+ * Chainlink rounds for `feed` on `chainId` covering [fromSec, toSec ?? now], oldest first, including
+ * the last round before `fromSec` so a step line can start at the window edge.
+ * Proxy round ids are phase<<64 | aggregatorRound and contiguous within a phase, so a window is an id
+ * range: one probe brackets its start, then only ids not yet cached are read (~4 calls cold for 24h,
+ * 1-2 per poll after).
+ */
+export function useFeedHistory(
+  chainId: AppChain["id"] | undefined,
+  feed: Address | undefined,
+  fromSec: number,
+  pollMs = 15_000,
+  toSec?: number,
+) {
   const client = usePublicClient({ chainId });
   return useQuery({
-    queryKey: ["feedHistory", chainId, feed, fromSec],
+    queryKey: ["feedHistory", chainId, feed, fromSec, toSec],
     enabled: !!client && !!feed && fromSec > 0,
-    refetchInterval: pollMs,
+    refetchInterval: pollMs, // cheap: one latestRoundData + only ids not cached
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<FeedRound[]> => {
       const key = `${chainId}:${feed!.toLowerCase()}`;
-      let rounds = roundCache.get(key) ?? [];
+      const c = caches.get(key) ?? { rounds: new Map(), anchors: new Map() };
+      caches.set(key, c);
 
-      /** Read rounds walking back from `startId`, stopping when `stop` says so or the phase begins. */
-      const walk = async (startId: bigint, stop: (r: FeedRound) => boolean) => {
-        const out: FeedRound[] = [];
-        let id = startId;
-        while ((id & LOW64) > 0n && out.length < MAX_ROUNDS) {
-          const ids: bigint[] = [];
-          for (let k = 0; k < BATCH && (id & LOW64) > 0n; k++, id--) ids.push(id);
-          const res = await client!.multicall({
-            contracts: ids.map((rid) => ({ address: feed!, abi: feedAbi, functionName: "getRoundData", args: [rid] }) as const),
-            allowFailure: true,
-          });
-          let stopped = false;
-          for (const r of res) {
-            if (r.status !== "success") continue;
-            const [rid, answer, , updatedAt] = r.result as readonly [bigint, bigint, bigint, bigint, bigint];
-            if (updatedAt === 0n) continue;
-            const round = { id: rid, price: answer, t: Number(updatedAt) };
-            out.push(round);
-            if (stop(round)) {
-              stopped = true;
-              break;
-            }
-          }
-          if (stopped) break;
-        }
-        return out;
-      };
-
-      // 1) newer rounds: walk back from latest until we reach what's cached (or, cold, until before the window)
       const [latestId] = await client!.readContract({ address: feed!, abi: feedAbi, functionName: "latestRoundData" });
-      const newest = rounds[rounds.length - 1];
-      if (!newest || latestId > newest.id) {
-        const fresh = await walk(latestId, (r) => (newest ? r.id <= newest.id : r.t < fromSec));
-        rounds = merge(rounds, fresh);
-      }
-      // 2) older rounds: backfill until the window (plus one round before it) is covered
-      const oldest = rounds[0];
-      if (oldest && oldest.t >= fromSec) rounds = merge(rounds, await walk(oldest.id - 1n, (r) => r.t < fromSec));
+      const first = latestId - (latestId & LOW64) + 1n; // first round of the current phase
 
-      rounds = rounds.slice(-MAX_ROUNDS);
-      roundCache.set(key, rounds);
-      const firstIn = rounds.findIndex((r) => r.t >= fromSec);
-      return firstIn === -1 ? rounds.slice(-1) : rounds.slice(Math.max(0, firstIn - 1));
+      // range to read: [lo, hi]
+      let lo = c.anchors.get(fromSec);
+      if (lo === undefined) lo = (await bracket(client!, feed!, fromSec, first, latestId))[0];
+      let hi = latestId;
+      if (toSec !== undefined) {
+        const e = c.anchors.get(-toSec);
+        hi = e ?? (await bracket(client!, feed!, toSec + 1, first, latestId))[1];
+      }
+      if (hi - lo > MAX_WINDOW) lo = hi - MAX_WINDOW;
+
+      const missing: bigint[] = [];
+      for (let id = lo; id <= hi; id++) if (!c.rounds.has(id)) missing.push(id);
+      for (const r of await readRounds(client!, feed!, missing)) c.rounds.set(r.id, r);
+
+      // exact edges from what we now hold
+      const inRange: FeedRound[] = [];
+      for (let id = lo; id <= hi; id++) {
+        const r = c.rounds.get(id);
+        if (r) inRange.push(r);
+      }
+      inRange.sort((x, y) => x.t - y.t || (x.id < y.id ? -1 : 1));
+      const startIdx = Math.max(0, inRange.findLastIndex((r) => r.t < fromSec));
+      c.anchors.set(fromSec, inRange[startIdx]?.id ?? lo);
+      let out = inRange.slice(startIdx);
+      if (toSec !== undefined) {
+        const endIdx = out.findLastIndex((r) => r.t <= toSec);
+        const endId = out[endIdx]?.id;
+        // only final once a later round exists; until then rounds can still land inside the window
+        if (endId !== undefined && endId < latestId) c.anchors.set(-toSec, endId);
+        out = out.slice(0, endIdx + 1);
+      }
+
+      if (c.rounds.size > MAX_CACHE) {
+        const keep = [...c.rounds.values()].sort((x, y) => y.t - x.t).slice(0, MAX_CACHE);
+        c.rounds = new Map(keep.map((r) => [r.id, r]));
+      }
+      return out;
     },
   });
-}
-
-function merge(a: FeedRound[], b: FeedRound[]) {
-  const byId = new Map<bigint, FeedRound>();
-  for (const r of a) byId.set(r.id, r);
-  for (const r of b) byId.set(r.id, r);
-  return [...byId.values()].sort((x, y) => x.t - y.t || (x.id < y.id ? -1 : 1));
 }
 
 // ---------------------------------------------------------------- CCIP price relay (SOL)
@@ -173,14 +219,33 @@ export function useRelayState(asset: Asset | undefined) {
     chainId: asset?.source.chainId,
     query: { enabled: !!asset?.relay },
   });
+  // ordered mirror: which source round Base is waiting for next (legacy mirrors don't expose this)
+  const lastSrc = useReadContract({
+    address: asset?.feed,
+    abi: relayedFeedAbi,
+    functionName: "lastSourceRound",
+    chainId: HUB_CHAIN.id,
+    query: { enabled: !!asset?.relay, retry: false },
+  });
+  const nextSrc = lastSrc.data && lastSrc.data > 0n ? lastSrc.data + 1n : undefined;
+  const nextSent = useReadContract({
+    address: asset?.relay?.relayer,
+    abi: feedRelayerAbi,
+    functionName: "sent",
+    args: nextSrc !== undefined ? [nextSrc] : undefined,
+    chainId: asset?.source.chainId,
+    query: { enabled: !!asset?.relay && nextSrc !== undefined, retry: false },
+  });
   if (!asset?.relay) return undefined;
   return {
     /** latest price stored on Base (undefined until the first relay lands) */
     onHub: relayed.data ? { price: relayed.data[1], t: Number(relayed.data[3]), id: relayed.data[0] } : undefined,
     hubLoading: relayed.isLoading && !relayed.isError,
     fee: quote.data?.[0],
-    /** the source has a round the relayer hasn't sent yet */
+    /** the source's latest round hasn't been sent yet */
     hasNew: quote.data?.[1] ?? false,
+    /** next source round Base needs, if it exists on the source and nobody has sent it */
+    gap: nextSrc !== undefined && nextSent.data === false ? nextSrc : undefined,
   };
 }
 

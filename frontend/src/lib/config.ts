@@ -25,7 +25,10 @@ export type Net = {
   color: string;
   /** Rough CCIP source-finality wait, shown to users. */
   eta: string;
+  /** RPC for reads (eth_call / multicall). */
   rpc: string;
+  /** Fallback RPC (also used for eth_getLogs where the primary limits log ranges). */
+  rpcFallback?: string;
 };
 
 export const NETS: Net[] = [
@@ -40,7 +43,8 @@ export const NETS: Net[] = [
     isHub: true,
     color: "#3b82f6",
     eta: "instant",
-    rpc: "https://base-sepolia-rpc.publicnode.com",
+    rpc: "https://sepolia.base.org", // fastest for multicall reads; caps eth_getLogs ranges
+    rpcFallback: "https://base-sepolia-rpc.publicnode.com", // full-range logs
   },
   {
     chain: arbitrumSepolia,
@@ -83,6 +87,8 @@ export type Asset = {
   source: { chainId: AppChain["id"]; feed: Address };
   /** Set when `feed` is a RelayedFeed mirror fed over CCIP from `source`. */
   relay?: { relayer: Address; lag: string };
+  /** Earlier mirror deployments still referenced by old markets (feed + its relayer). */
+  legacy?: { feed: Address; relayer: Address }[];
   /** Rounding for the default strike in the create form. */
   strikeStep: number;
   /** Feed's update rule, shown under charts. */
@@ -114,9 +120,11 @@ export const ASSETS: Asset[] = [
     symbol: "SOL",
     name: "Solana",
     // RelayedFeed on Base, fed by FeedRelayer on Arbitrum Sepolia over CCIP
-    feed: "0x61053fdf7ab0f5681060309ED5a8dA7A24616A9A",
+    feed: "0x7feAA707fB0847B782f61509a7B4cf8A15055B35",
     source: { chainId: arbitrumSepolia.id, feed: "0x32377717BC9F9bA8Db45A244bCE77e7c0Cc5A775" },
-    relay: { relayer: "0x7d043Ca653CC66bB472f4F5FE84E91E69C90Ed8F", lag: "~25 min" },
+    relay: { relayer: "0xbDe2FC16e9811Ee5bEa0A69568f16d9D207F5B40", lag: "~25 min" },
+    // v1 latest-only relay (retired; market #2 settles on it)
+    legacy: [{ feed: "0x61053fdf7ab0f5681060309ED5a8dA7A24616A9A", relayer: "0x7d043Ca653CC66bB472f4F5FE84E91E69C90Ed8F" }],
     strikeStep: 0.5,
     cadence: "updates on 0.5% moves or every 24 h",
     heartbeat: 86400,
@@ -125,8 +133,16 @@ export const ASSETS: Asset[] = [
 
 export const assetBySymbol = (s: AssetSymbol) => ASSETS.find((a) => a.symbol === s)!;
 /** Asset for a market's feed; unknown feeds fall back to a generic label. */
-export const assetByFeed = (feed: Address): Asset | undefined =>
-  ASSETS.find((a) => a.feed.toLowerCase() === feed.toLowerCase());
+export const assetByFeed = (feed: Address): Asset | undefined => {
+  const f = feed.toLowerCase();
+  for (const a of ASSETS) {
+    if (a.feed.toLowerCase() === f) return a;
+    const old = a.legacy?.find((l) => l.feed.toLowerCase() === f);
+    // same asset, but read the mirror + relayer that market actually settles on
+    if (old && a.relay) return { ...a, feed: old.feed, relay: { ...a.relay, relayer: old.relayer } };
+  }
+  return undefined;
+};
 
 export const netByChainId = (id?: number) => NETS.find((n) => n.chain.id === id);
 export const netBySelector = (sel: bigint) => NETS.find((n) => n.positionSelector === sel);

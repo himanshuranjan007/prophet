@@ -76,6 +76,17 @@ The old `Star`, `Arrow`, `Squiggle`, `Hop`, `Circled` doodles are retired.
 - Nothing animates on page load except the one hero underline draw-in.
 - `prefers-reduced-motion` disables transforms and loops.
 
+### Live price chart (`PriceChart.tsx`)
+
+The data is Chainlink rounds only (no exchange ticks). The motion is time flowing, not invented prices:
+
+- While a market is open, a rAF clock (~30fps, paused in background tabs and under reduced motion) drives the window. `LIVE` (30 min) pins "now" near the right edge, so the chart scrolls. 1H/6H/24H glide.
+- The latest price is held as a line out to "now", with a pulsing ink head dot. An ink price tag rides the head in the right gutter (`chart-glide`, `--dur-slow` + `--ease-ink`).
+- A new round's step draws in like a pen stroke (`chart-pen`) and a ripple marks it (`chart-ripple`). Both are keyed by round id, so each animates once.
+- The y-axis snaps to nice tick steps, so it only rescales on a real breakout, never on every update.
+- In LIVE the feed is polled every 5s, otherwise every 15s. Closed markets read a bounded window.
+- Labels over the line get a paper halo (`paint-order: stroke`). Strike and zone labels sit on the left, clear of the price tag.
+
 ## Copy
 
 - Sentence case, calm, specific. "Place a bet", not "Make your call!!". Keep a little warmth ("Dare a friend" is fine).
