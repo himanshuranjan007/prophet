@@ -9,7 +9,10 @@ const rpc = (id: number) => {
   return n.rpcFallback ? fallback([http(n.rpc), http(n.rpcFallback)]) : http(n.rpc);
 };
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+/** Shown to wallets (WalletConnect / Base Account metadata). Both connectors are browser-only, so the
+ *  page's own origin is right on any deployment (production, preview) when no explicit URL is set. */
+const SITE =
+  process.env.NEXT_PUBLIC_SITE_URL ?? (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
 /** Free project id from https://dashboard.reown.com. WalletConnect (mobile wallets) is hidden without it. */
 const WC_PROJECT_ID = process.env.NEXT_PUBLIC_WC_PROJECT_ID;
 export const walletConnectEnabled = !!WC_PROJECT_ID;

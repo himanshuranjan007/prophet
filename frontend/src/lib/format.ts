@@ -32,9 +32,13 @@ export function status(m: Market, now: number) {
 export function countdown(closeTime: bigint, now: number) {
   let s = Number(closeTime) - now;
   if (s <= 0) return "closed";
+  const d = Math.floor(s / 86400);
+  s -= d * 86400;
   const h = Math.floor(s / 3600);
   s -= h * 3600;
   const m = Math.floor(s / 60);
   s -= m * 60;
+  if (d >= 2) return `${d}d ${h}h`; // "6d 23h", not "167h 4m"
+  if (d === 1) return `${24 + h}h ${m}m`;
   return h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`;
 }
